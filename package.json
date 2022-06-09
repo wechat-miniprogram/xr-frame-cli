@@ -1,0 +1,53 @@
+{
+  "name": "xr-frame-cli",
+  "version": "0.8.0",
+  "description": "Command tools for xr-frame.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "export NODE_ENV=development && ./node_modules/.bin/tsc && node ./dist/index.js",
+    "build": "./node_modules/.bin/tsc",
+    "prepublish": "npm run build"
+  },
+  "bin": {
+    "xr-frame": "./dist/index.js"
+  },
+  "keywords": [
+    "xr-frame",
+    "weixin",
+    "weichat",
+    "miniprogram"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+git@github.com:dtysky/xr-frame-cli.git"
+  },
+  "authors": [
+    {
+      "name": "dtysky",
+      "email": "dtysky@outlook.com"
+    }
+  ],
+  "license": "MIT",
+  "files": [
+    "dist",
+    "LICENCE",
+    "README.md"
+  ],
+  "bugs": {
+    "url": "https://github.com/dtysky/xr-frame-cli/issues"
+  },
+  "homepage": "https://github.com/dtysky/xr-frame-cli#readme",
+  "devDependencies": {
+    "@types/inquirer": "^0.0.41",
+    "@types/node": "^12.7.3",
+    "@types/yargs": "^11.0.0",
+    "typescript": "^3.2.4"
+  },
+  "dependencies": {
+    "inquirer": "^5.2.0",
+    "recursive-copy": "^2.0.9",
+    "remote-origin-url": "^1.0.0",
+    "through2": "^2.0.3",
+    "yargs": "^11.0.0"
+  }
+}
