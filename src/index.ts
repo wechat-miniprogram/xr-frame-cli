@@ -28,12 +28,12 @@ const {argv} = Yargs
     'gltf',
     '（预留）预处理gltf资源',
     yargs => yargs
-      .example('$0 env-data -i room.png', '通过room.png生成，输出到当前目录下同名文件夹。')
-      .example('$0 env-data -i room.png -o room1', '输出到room1文件夹。')
+      .example('$0 gltf -i test.gltf', '处理test.gltf文件，输出到当前目录下同名文件夹test。')
+      .example('$0 env-data -i test.gltf -o test1', '输出到room1文件夹。')
       .alias('i', 'input')
       .describe('i', `指定输入gltf文件或目录，不指定则处理当前目录下所有gltf。`)
       .alias('o', 'output')
-      .describe('r', '指定输出数据目录，不指定则输出到同名文件夹，原始文件会保存在bak文件夹下。')
+      .describe('r', '指定输出数据目录，不指定则输出到gltf文件同名文件夹。')
   )
   .help('h')
   .alias('h', 'help');
