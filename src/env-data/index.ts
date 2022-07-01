@@ -78,9 +78,9 @@ export async function exec(argv: yargs.Arguments) {
     showError(`输入图片宽高比必须接近2:1 现在为${image.width}:${image.height}`)
   }
   
-  let {specular, diffuse} = renderer.process(image, width, height);
-  const specularImg = await encodeImage(specular, width, width, 4, hdr);
-  const skyboxImg = await encodeImage(image.buffer, image.width, image.height, rgb ? 3 : 4, !rgb);
+  let {specular, skybox, diffuse} = renderer.process(image, width, height);
+  const specularImg = await encodeImage(specular, width, width, hdr);
+  const skyboxImg = await encodeImage(skybox, width, height, !rgb);
 
   if (!fs.existsSync(output)) {
     fs.mkdirSync(output);

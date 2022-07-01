@@ -10,6 +10,24 @@ void main()
 }
 `;
 
+export const skyboxFrag = `
+precision mediump float;
+precision highp int;
+varying highp vec2 v_uv;
+
+uniform sampler2D u_texture;
+
+vec3 acesToneMapping(vec3 color) {
+  return (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
+}
+
+void main()
+{
+  vec4 color = texture2D(u_texture, v_uv);
+  gl_FragColor = vec4(acesToneMapping(color.rgb), color.a);
+}
+`;
+
 export const blurFrag = `
 precision mediump float;
 precision highp int;

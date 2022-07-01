@@ -7,7 +7,7 @@
 import * as GL from 'gl';
 import {indexes, vertexes} from './buffers';
 import {IImage} from './image';
-import {blurFrag, mipmapsFrag, vert} from './shaders';
+import {blurFrag, mipmapsFrag, skyboxFrag, vert} from './shaders';
 
 class Renderer {
   private _gl: WebGLRenderingContext;
@@ -33,6 +33,7 @@ class Renderer {
     this._createBuffers();
     this._createProgram('blur', vert, blurFrag);
     this._createProgram('mipmaps', vert, mipmapsFrag);
+    this._createProgram('skybox', vert, skyboxFrag);
 
     gl.disable(gl.STENCIL_TEST);
     gl.disable(gl.DEPTH_TEST);
@@ -43,16 +44,44 @@ class Renderer {
 
   // return png, if hdr, use rgbd
   public process(image: IImage, width: number, height: number): {
-    specular: ArrayBufferView,
+    specular: Uint8Array,
+    skybox: Uint8Array,
     diffuse: number[][]
   } {
     const gl = this._gl;
-    this._resizeExt.resize(width, width);
 
     const blured = this._blur(image, width, height);
     const specular = this._mipmaps(blured, width);
+    const skybox = this._skybox(image, width, height);
 
-    return {specular, diffuse: this._generateSH()};
+    return {specular, skybox, diffuse: this._generateSH()};
+  }
+
+  private _skybox(image: IImage, width: number, height: number): Uint8Array {
+    const gl = this._gl;
+    this._resizeExt.resize(width, height);
+    const shader = this._shaders['skybox'];
+    const tex = this._getTexture(image.width, image.height, image.rgb, image.hdr, image.premultiplyAlpha, image.buffer);
+    const rt = this._getRT(width, height);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rt);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(shader.program);
+    this._bindBuffers('skybox');
+    gl.uniform1i(shader.uTex, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+    const len = width * height * 4;
+    let pixels = this._resPixels[len];
+    if (!pixels) {
+      pixels = this._resPixels[len] = new Uint8Array(len);
+    }
+
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    return pixels;
   }
 
   private _blur(image: IImage, width: number, height: number): WebGLFramebuffer {
@@ -75,6 +104,7 @@ class Renderer {
 
   private _mipmaps(source: WebGLFramebuffer, size: number): Uint8Array {
     const gl = this._gl;
+    this._resizeExt.resize(size, size);
     const shader = this._shaders['mipmaps'];
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, size, size);
