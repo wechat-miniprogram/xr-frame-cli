@@ -4,7 +4,7 @@
   "description": "Command tools for xr-frame.",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "export NODE_ENV=development && ./node_modules/.bin/tsc && node ./dist/index.js",
+    "dev": "export NODE_ENV=development && ./node_modules/.bin/tsc && npm link",
     "build": "./node_modules/.bin/tsc",
     "prepublish": "npm run build"
   },
@@ -44,9 +44,12 @@
     "typescript": "^3.2.4"
   },
   "dependencies": {
+    "gl": "^5.0.3",
+    "hdr": "^0.6.1",
     "inquirer": "^5.2.0",
     "recursive-copy": "^2.0.9",
     "remote-origin-url": "^1.0.0",
+    "sharp": "^0.30.7",
     "through2": "^2.0.3",
     "yargs": "^11.0.0"
   }

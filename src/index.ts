@@ -19,10 +19,13 @@ const {argv} = Yargs
     yargs => yargs
       .example('$0 env-data -i room.png', '通过room.png生成，输出到当前目录下同名文件夹。')
       .example('$0 env-data -i room.png -o room1', '输出到room1文件夹。')
+      .example('$0 env-data -s 1024', '指定输出的纹理尺寸为1024。')
       .alias('i', 'input')
       .describe('i', `指定输入全景图。`)
       .alias('o', 'output')
       .describe('o', '指定输出数据文件夹，不指定则输出到同名文件夹。')
+      .alias('s', 'size')
+      .describe('s', '指定输出纹理的尺寸。')
   )
   .command(
     'gltf',
