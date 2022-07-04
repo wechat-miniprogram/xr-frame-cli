@@ -7,11 +7,13 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as yargs from 'yargs';
-
 import {
   showError,
   toSnakeCase,
-  showInfo
+  showInfo,
+  isImageFile,
+  showWarn,
+  getChildrenFromFolder
 } from '../utils';
 import {decodeImage, encodeImage, IImage} from './image';
 import renderer from './renderer';
@@ -47,13 +49,7 @@ function getSize(image: IImage, size: number): {width: number, height: number} {
   return {width: toPOT(width), height: toPOT(height)};
 }
 
-export async function exec(argv: yargs.Arguments) {
-  let {input, output, size} = argv;
-
-  if (!input) {
-    showError('必要参数input不存在！');
-  }
-
+async function execOne(input: string, output: string, size?: number) {
   showInfo(`处理输入'${input}'`);
 
   if (!fs.existsSync(input)) {
@@ -97,4 +93,59 @@ export async function exec(argv: yargs.Arguments) {
   }, null, 2), {encoding: 'utf-8'});
 
   showInfo(`输出完成 '${input}'`);
+}
+
+function getOutput(isFolder: boolean, i: string, o?: string): string {
+  if (o && !fs.existsSync(o)) {
+    try {
+      fs.mkdirSync(o);
+    } catch (error) {
+      showError(`指定的输出路径不存在且创建失败 ${o}, ${error}`);
+    }
+  }
+
+  if (!isFolder) {
+    return o || i.replace(path.extname(i), '');
+  }
+
+  return path.resolve(o || path.dirname(i), path.basename(i).replace(path.extname(i), ''));
+}
+
+export async function exec(argv: yargs.Arguments) {
+  let {input, output, size} = argv;
+
+  if (!input) {
+    showError('必要参数`input`不存在！');
+  }
+
+  if (!fs.existsSync(input)) {
+    showError(`路径不存在 ${input}!`);
+  }
+
+  const inputs: string[] = [];
+  const outputs: string[] = [];
+  if (fs.statSync(input).isDirectory()) {
+    showInfo(`处理文件夹 ${input}...`);
+    getChildrenFromFolder(input, fp => {
+      const res = isImageFile(fp);
+      !res && showWarn(`'${fp}' 不是图片文件，忽略...`);
+      return res;
+    }).forEach(fp => {
+      inputs.push(fp);
+      outputs.push(getOutput(true, fp, output));
+    });
+  } else if (!isImageFile(input)) {
+    showWarn(`'${input}' 不是图片文件，忽略...`);
+  } else {
+    inputs.push(input);
+    outputs.push(getOutput(false, input, output));
+  }
+
+  if (!input.length) {
+    showError('有效输入路径为0！');
+  }
+
+  for (let index = 0; index < inputs.length; index += 1) {
+    await execOne(inputs[index], outputs[index], size); 
+  }
 }

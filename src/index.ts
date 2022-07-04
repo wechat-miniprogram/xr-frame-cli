@@ -9,6 +9,7 @@ import * as Yargs from 'yargs';
 
 import {showError} from './utils';
 import * as cmdEnvData from './env-data';
+import * as cmdGltf from './gltf';
 
 const {argv} = Yargs
   .command('$0', 'xr-frame相关脚手架，使用 `xr-frame -h` 查看所有有效指令。')
@@ -19,9 +20,10 @@ const {argv} = Yargs
     yargs => yargs
       .example('$0 env-data -i room.png', '通过room.png生成，输出到当前目录下同名文件夹。')
       .example('$0 env-data -i room.png -o room1', '输出到room1文件夹。')
+      .example('$0 env-data -i src -o dst', '将src文件夹的所有图片，生成到dst文件夹中，不指定输出则生成到目录下。')
       .example('$0 env-data -s 1024', '指定输出的纹理尺寸为1024。')
       .alias('i', 'input')
-      .describe('i', `指定输入全景图。`)
+      .describe('i', `指定输入全景图或者文件夹。`)
       .alias('o', 'output')
       .describe('o', '指定输出数据文件夹，不指定则输出到同名文件夹。')
       .alias('s', 'size')
@@ -31,12 +33,12 @@ const {argv} = Yargs
     'gltf',
     '（预留）预处理gltf资源，同图元下属性强制交错，根据需要自动生成法线切线',
     yargs => yargs
-      .example('$0 gltf -i test.gltf', '处理test.gltf文件，输出到当前目录下同名文件夹test。')
-      .example('$0 env-data -i test.gltf -o test1', '输出到room1文件夹。')
+      .example('$0 env-data -i test.gltf -o test1', '处理test.gltf文件，输出到test1文件夹。')
+      .example('$0 env-data -i src -o dst', '将src文件夹的所有gltf资源（支持到二级目录），生成到dst文件夹中。')
       .alias('i', 'input')
-      .describe('i', `指定输入gltf文件或目录，不指定则处理当前目录下所有gltf。`)
+      .describe('i', `指定输入gltf文件或目录。`)
       .alias('o', 'output')
-      .describe('r', '指定输出数据目录，不指定则输出到gltf文件同名文件夹。')
+      .describe('o', '指定输出数据目录。')
   )
   .help('h')
   .alias('h', 'help');
@@ -50,5 +52,5 @@ if (argv._[0] === 'env-data') {
 }
 
 if (argv._[0] === 'gltf') {
-  // cmdMerge.exec(argv);
+  cmdGltf.exec(argv);
 }
