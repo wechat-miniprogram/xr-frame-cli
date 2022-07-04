@@ -94,7 +94,7 @@ export async function exec(argv: yargs.Arguments) {
     skybox: {type: '2D', half: false, map: skyboxPath},
     specular: {type: '2D', rgbd: hdr, mipmaps: true, map: specularPath},
     diffuse: {coefficients: diffuse}
-  }), {encoding: 'utf-8'});
+  }, null, 2), {encoding: 'utf-8'});
 
   showInfo(`输出完成 '${input}'`);
 }

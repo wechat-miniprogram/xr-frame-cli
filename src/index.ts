@@ -29,7 +29,7 @@ const {argv} = Yargs
   )
   .command(
     'gltf',
-    '（预留）预处理gltf资源',
+    '（预留）预处理gltf资源，同图元下属性强制交错，根据需要自动生成法线切线',
     yargs => yargs
       .example('$0 gltf -i test.gltf', '处理test.gltf文件，输出到当前目录下同名文件夹test。')
       .example('$0 env-data -i test.gltf -o test1', '输出到room1文件夹。')

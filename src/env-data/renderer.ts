@@ -9,6 +9,13 @@ import {indexes, vertexes} from './buffers';
 import {IImage} from './image';
 import {blurFrag, mipmapsFrag, skyboxFrag, vert} from './shaders';
 
+const R_PI = 1 / Math.PI;
+const SQRT_R_PI = Math.sqrt(R_PI);
+const SQRT_R_PI3 = Math.sqrt(3 * R_PI);
+const SQRT_R_PI5 = Math.sqrt(5 * R_PI);
+const SQRT_R_PI15 = Math.sqrt(15 * R_PI);
+const SH9_LMS = ['00', '1-1', '10', '11', '2-2', '2-1', '20', '21', '22'];
+
 class Renderer {
   private _gl: WebGLRenderingContext;
   private _resizeExt: any;
@@ -54,7 +61,7 @@ class Renderer {
     const specular = this._mipmaps(blured, width);
     const skybox = this._skybox(image, width, height);
 
-    return {specular, skybox, diffuse: this._generateSH()};
+    return {specular, skybox, diffuse: this._generateSH(image, height)};
   }
 
   private _skybox(image: IImage, width: number, height: number): Uint8Array {
@@ -126,8 +133,57 @@ class Renderer {
     return pixels;
   }
 
-  private _generateSH() {
-    return [];
+  private _generateSH(image: IImage, dstH: number) {
+    const {width, height, hdr, rgb, buffer} = image;
+    const sizeX = dstH;
+    const sizeY = dstH / 2;
+    const a = (4 * Math.PI / sizeX / sizeY) * (hdr ? 1 : 1 / 255);
+    const sh9 = new Array(9).fill(0).map(() => [0, 0, 0]);
+    
+    for (let y = 0; y < sizeY; y += 1) {
+      for (let x = 0; x < sizeX; x += 1) {
+        const theta = Math.acos(1 - x * 2.0 / (sizeX - 1));
+        const phi = 2 * Math.PI * (y * 1.0 / (sizeY - 1));
+        const v = Math.floor((1 - theta / Math.PI) * (height - 1));
+        const u = Math.floor((phi / Math.PI / 2) * (width - 1));
+        const offset = (v * height + u) * (rgb ? 3 : 4);
+        SH9_LMS.forEach((lm, index) => {
+          const basis = this._getSHBasis(lm, theta, phi);
+          sh9[index][0] += a * basis * buffer[offset];
+          sh9[index][1] += a * basis * buffer[offset + 1];
+          sh9[index][2] += a * basis * buffer[offset + 2];
+        });
+      }
+    }
+
+    return sh9;
+  }
+
+  private _getSHBasis(lm: string, theta: number, phi: number){
+    let tmp: number;
+    switch (lm) {
+      case '00':
+        return 0.5 * SQRT_R_PI;
+      case '10':
+        return 0.5 * SQRT_R_PI3 * Math.cos(theta);
+      case '11':
+        return 0.5 * SQRT_R_PI3 * Math.sin(theta) * Math.cos(phi);
+      case '1-1':
+        return 0.5 * SQRT_R_PI3 * Math.sin(theta) * Math.sin(phi);
+      case '20':
+        tmp = Math.cos(theta);
+        return 0.25 * SQRT_R_PI5 * (3 * tmp * tmp - 1);
+      case '21':
+        return 0.5 * SQRT_R_PI15 * Math.sin(theta) * Math.cos(theta) * Math.cos(phi);
+      case '2-1':
+        return 0.5 * SQRT_R_PI15 * Math.sin(theta) * Math.cos(theta) * Math.sin(phi);;
+      case '22':
+        tmp = Math.sin(theta);
+        return 0.25 * SQRT_R_PI15 * tmp * tmp * Math.cos(2 * phi);
+      case '2-2':
+        tmp = Math.sin(theta);
+        return 0.25 * SQRT_R_PI15 * tmp * tmp * Math.sin(2 * phi);
+    }
   }
 
   private _getTexture(
