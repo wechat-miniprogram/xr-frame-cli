@@ -39,17 +39,20 @@
   "homepage": "https://github.com/dtysky/xr-frame-cli#readme",
   "devDependencies": {
     "@types/inquirer": "^0.0.41",
-    "@types/node": "^12.7.3",
+    "@types/node": "^12.20.55",
     "@types/yargs": "^11.0.0",
     "typescript": "^3.2.4"
   },
   "dependencies": {
     "gl": "^5.0.3",
+    "gltf-pipeline": "^3.0.5",
     "hdr": "^0.6.1",
     "inquirer": "^5.2.0",
+    "ncp": "^2.0.0",
     "recursive-copy": "^2.0.9",
     "remote-origin-url": "^1.0.0",
     "sharp": "^0.30.7",
+    "shelljs": "^0.8.5",
     "through2": "^2.0.3",
     "yargs": "^11.0.0"
   }

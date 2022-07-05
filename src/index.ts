@@ -39,6 +39,7 @@ const {argv} = Yargs
       .describe('i', `指定输入gltf文件或目录。`)
       .alias('o', 'output')
       .describe('o', '指定输出数据目录。')
+      .describe('glb', '是否转换为glb。')
   )
   .help('h')
   .alias('h', 'help');
