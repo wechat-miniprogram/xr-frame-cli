@@ -88,7 +88,7 @@ async function execOne(input: string, output: string, size?: number) {
   fs.writeFileSync(path.resolve(output, skyboxPath), skyboxImg);
   fs.writeFileSync(path.resolve(output, 'data.json'), JSON.stringify({
     skybox: {type: '2D', half: false, map: skyboxPath},
-    specular: {type: '2D', rgbd: hdr, mipmaps: true, map: specularPath},
+    specular: {type: '2D', rgbd: hdr, mipmaps: true, mipmapCount: 5, map: specularPath},
     diffuse: {coefficients: diffuse}
   }, null, 2), {encoding: 'utf-8'});
 
