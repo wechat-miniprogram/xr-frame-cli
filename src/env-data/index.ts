@@ -37,7 +37,7 @@ function toPOT(size: number) {
 function getSize(image: IImage, size: number): {width: number, height: number} {
   let {width, height} = image;
 
-  if (!size) {
+  if (!size || size > image.width) {
     size = image.width;
   }
 

@@ -68,11 +68,11 @@ function getComponentByteLenthAndClass(type: number): [number, new (...any) => A
   }
 }
 
-function getEntity(fp: string, o: string, toGLB: boolean): IEntity {
+function getEntity(fp: string, o: string): IEntity {
   const iDir = path.dirname(fp);
   const file = path.basename(fp);
   const isGLB = path.extname(fp) === '.glb';
-  const oDir = toGLB ? o : path.resolve(o, path.dirname(fp).split('/').pop());
+  const oDir = path.resolve(o, isGLB ? file.replace('.glb', '') : path.dirname(fp).split('/').pop());
 
   return {iDir, file, isGLB, oDir};
 }
@@ -296,12 +296,12 @@ export async function exec(argv: yargs.Arguments) {
     getChildrenFromFolder(input, fp => {
       return isGLTFFile(fp);
     }, 2).forEach(fp => {
-      entites.push(getEntity(fp, output, glb));
+      entites.push(getEntity(fp, output));
     });
   } else if (!isGLTFFile(input)) {
     showWarn(`'${input}' 不是gltf文件，忽略...`);
   } else {
-    entites.push(getEntity(input, output, glb));
+    entites.push(getEntity(input, output));
   }
 
   if (!input.length) {

@@ -39,17 +39,28 @@ export function toSnakeCase(str: string) {
 }
 
 export function getChildrenFromFolder(dp: string, filter: (fp: string) => boolean, depth: number = 1): string[] {
-  const children = fs.readdirSync(dp);
   const res: string[] = [];
 
-  for (const child of children) {
-    if (!fs.statSync(child).isDirectory()) {
-      const fp = path.resolve(dp, child);
+  function walk(dirPath: string, currentDepth: number) {
+    if (currentDepth <= 0) {
+      return;
+    }
+
+    const children = fs.readdirSync(dirPath);
+    for (const child of children) {
+      if (fs.statSync(child).isDirectory()) {
+        walk(path.join(dirPath, child), currentDepth - 1);
+        continue;
+      }
+
+      const fp = path.resolve(dirPath, child);
       if (filter(fp)) {
         res.push(fp);
       }
     }
   }
+
+  walk(dp, depth);
 
   return res;
 }
