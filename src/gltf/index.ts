@@ -33,7 +33,7 @@ interface IEntity {
   oDir: string;
 }
 
-function getTypeByteLenth(type: string) {
+function getTypeLenth(type: string) {
   switch (type) {
     case 'SCALAR':
       return 1;
@@ -77,7 +77,6 @@ function getEntity(fp: string, o: string): IEntity {
   return {iDir, file, isGLB, oDir};
 }
 
-// assets里的是相对于iDir的路径
 async function processGlTF(entity: IEntity): Promise<{gltf: Object, assets: string[];}> {
   let gltf: any;
   let separateResources: {[key: string]: Buffer;};
@@ -90,27 +89,29 @@ async function processGlTF(entity: IEntity): Promise<{gltf: Object, assets: stri
 
   if (entity.isGLB) {
     const buffer = await readFileBuffer(path.resolve(entity.iDir, entity.file));
-    const res = await gltfPipe.glbToGltf(buffer, {separate: true});
+    const res = await gltfPipe.glbToGltf(buffer, {separate: true, resourceDirectory: entity.iDir});
     gltf = res.gltf;
-    separateResources = res;
+    separateResources = res.separateResources;
   } else {
     const json = await readFileJson(path.resolve(entity.iDir, entity.file));
-    const res = await gltfPipe.processGltf(json, {separate: true});
+    const res = await gltfPipe.processGltf(json, {separate: true, resourceDirectory: entity.iDir});
     gltf = res.gltf;
-    separateResources = res;
+    separateResources = res.separateResources;
   }
 
   for (const relativePath in separateResources) {
     const op = path.resolve(entity.oDir, relativePath);
-    await writeFile(op, separateResources[relativePath]);
     if (!/.bin$/.test(op)) {
-      assets.push(op);
+      assets.push(await writeFile(op, separateResources[relativePath]));
     } else {
       buffers[relativePath] = separateResources[relativePath];
     }
   }
 
-  processMeshes(gltf, buffers);
+  const buffer = await processMeshes(gltf, buffers);
+  assets.push(await writeFile(path.resolve(entity.oDir, 'buffer.bin'), buffer));
+  gltf.buffers = [{uri: 'buffer.bin', byteLength: buffer.byteLength}];
+
   gltf.extensionsUsed = gltf.extensionsUsed || [];
   gltf.extensionsUsed.push('WX_prcessed_model');
 
@@ -122,24 +123,28 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
     return;
   }
 
-  const bufferViews = gltf.bufferViews.map(bv => {
+  gltf.bufferViews.forEach(bv => {
     bv.byteOffset = bv.byteOffset || 0;
-    bv.buffer = buffers[gltf.buffers[bv.buffer].uri].slice(bv.byteOffset, bv.byteLength);
+    bv.buffer = buffers[gltf.buffers[bv.buffer].uri].buffer.slice(bv.byteOffset, bv.byteOffset + bv.byteLength);
     delete bv.byteOffset;
     delete bv.byteLength;
-    return bv;
   });
 
   const geometries: {[attr: string]: number;}[] = [];
   gltf.meshes.forEach(mesh => {
-    if (!mesh.primitives) {
+    const {primitives, mode} = mesh;
+
+    if (mode && mode !== 4) {
+      showWarn('图元类型不为4(三角形)，忽略...');
       return;
     }
 
-    const {primitives} = mesh;
+    if (!primitives) {
+      return;
+    }
 
     primitives.forEach(prim => {
-      const {attributes, material} = prim;
+      const {attributes} = prim;
 
       let index: number = 0;
       for (const geo of geometries) {
@@ -179,54 +184,157 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
   });
 
   gltf.meshes.forEach(mesh => {
-    processMesh(mesh, gltf.accessors, gltf.materials, bufferViews, geometries);
+    processMesh(mesh, gltf.accessors, gltf.materials, gltf.bufferViews, geometries);
   });
 
-  const geoBuffers: Buffer[] = geometries.map((geo, index) => {
-    let len: number = 0;
-    for (const attrKey in geo) {
-      const attr = geo[attrKey];
-      const accessor = gltf.accessors[attr];
-      accessor.geometryIndex = index;
-      len += accessor.count * getComponentByteLenthAndClass(accessor.componentType)[0] * getTypeByteLenth(accessor.type);
-    }
-
-    return Buffer.alloc(len);
+  const geoBuffers = geometries.map((geo, index) => {
+    return processGeometry(index, geo, gltf.accessors, gltf.bufferViews);
   });
 
-  processBuffers(gltf.accessors, bufferViews, geoBuffers);
+  return processBuffers(gltf.accessors, gltf.bufferViews, geoBuffers);
 }
 
-function processBuffers(accessors: any, bvs: any, geoBuffers: Buffer[]) {
-  const geoBufferUsed = geoBuffers.map(() => false);
+function processGeometry(index: number, geo: any, accessors: any, bvs: any) {
+  let maxCount: number = 0;
+  let stride: number = 0;
+  for (const attrKey in geo) {
+    const attr = geo[attrKey];
+    const accessor = accessors[attr];
+    const s = getComponentByteLenthAndClass(accessor.componentType)[0] * getTypeLenth(accessor.type);
+    stride += s % 4 === 0 ? s : Math.floor(s / 4) + 4;
+    maxCount = Math.max(accessor.count, maxCount);
+  }
 
-  accessors.forEach((accessor, index) => {
+  const buffer = Buffer.alloc(maxCount * stride).buffer;
 
+  let offset: number = 0;
+  for (const attrKey in geo) {
+    const attr = geo[attrKey];
+    const accessor = accessors[attr];
+    const bv = bvs[accessor.bufferView];
+    const [_l, clz] = getComponentByteLenthAndClass(accessor.componentType);
+    const count = getTypeLenth(accessor.type);
+    const origPerLen = (bv.stride || (_l * count)) / _l;
+    const perLen = stride / _l;
+
+    const origView = new clz(bv.buffer, accessor.byteOffset || 0) as Float32Array;
+    const view = new clz(buffer, offset) as Float32Array;
+    const max = new Array(count).fill(-Infinity);
+    const min = new Array(count).fill(Infinity);
+
+    let j: number = 0;
+    for (let i = 0; i < origView.length; i += origPerLen) {
+      for (let k = 0; k < count; k += 1) {
+        const v = view[j + k] = origView[i + k];
+        max[k] = Math.max(v, max[k]);
+        min[k] = Math.min(v, min[k]);
+      }
+      j += perLen;
+    }
+
+    accessor.geometryIndex = index;
+    accessor.count = maxCount;
+    accessor.max = max;
+    accessor.min = min;
+    accessor.byteOffset = offset;
+    const s = _l * count;
+    offset += s % 4 === 0 ? s : Math.floor(s / 4) + 4;
+  }
+
+  return {buffer, stride};
+}
+
+function processBuffers(
+  accessors: any, bvs: any,
+  geoBuffers: {buffer: ArrayBuffer, stride: number}[]
+) {
+  let totalLen: number = 0;
+  const bvCache = new Set<string | number>();
+  accessors.forEach((accessor) => {
+    if (accessor.geometryIndex !== undefined && !bvCache.has(`g-${accessor.geometryIndex}`)) {
+      totalLen += geoBuffers[accessor.geometryIndex].buffer.byteLength;
+      bvCache.add(`g-${accessor.geometryIndex}`);
+    } else if (!bvCache.has(accessor.bufferView)) {
+      totalLen += bvs[accessor.bufferView].buffer.byteLength;
+      bvCache.add(accessor.bufferView);
+    }
   });
+
+  const buffer = Buffer.alloc(totalLen);
+  const geoBvCache: {[key: string]: any} = {};
+  bvCache.clear();
+
+  let offset: number = 0;
+  accessors.forEach((accessor) => {
+    let b: ArrayBuffer;
+    let bv: any;
+    if (accessor.geometryIndex === undefined && !bvCache.has(accessor.bufferView)) {
+      bv = bvs[accessor.bufferView];
+      b = bv.buffer;
+      bvCache.add(accessor.bufferView);
+    } else if (accessor.geometryIndex !== undefined) {
+      const cKey = `g-${accessor.geometryIndex}`;
+      if (geoBvCache[cKey]) {
+        bvs[accessor.bufferView] = geoBvCache[cKey];
+        delete accessor.geometryIndex;
+        return;
+      }
+      const {buffer: b1, stride} = geoBuffers[accessor.geometryIndex];
+      delete accessor.geometryIndex;
+      bv = geoBvCache[cKey] = bvs[accessor.bufferView] = {
+        target: 34962,
+        byteStride: stride
+      };
+      b = b1;
+    } else {
+      return;
+    }
+
+    buffer.set(Buffer.from(b), offset);
+    bv.byteOffset = offset;
+    bv.buffer = 0;
+    bv.byteLength = b.byteLength;
+    offset += b.byteLength;
+  });
+
+  return buffer;
 }
 
 function processMesh(
   mesh: any, accessors: any, materials: any,
-  bvs: any, geometries: {[attrName: string]: number;}[]
+  bvs: any, geometries: {[attrName: string]: number}[]
 ) {
   mesh.primitives?.forEach(prim => {
-    const {attributes, material} = prim;
+    const {attributes, material, indices} = prim;
 
     if (!attributes) {
       return;
     }
 
     const geometry = geometries[attributes.geometry];
-    if (materials[material]?.normalTexture) {
+    delete prim.geometry;
+
+    if (!geometry) {
+      return;
+    }
+
+    if (materials[material]?.normalTexture && !(geometry.NORMAL !== undefined && geometry.TANGENT !== undefined)) {
       if (!geometry.TEXCOORD_0) {
         showWarn('需要生成法线数据但缺失uv数据，忽略...');
+      } else if (indices === undefined) {
+        showWarn('需要生成法线数据但缺失索引，忽略...');
       } else {
+        const iaccessor = accessors[indices];
+        const indexBuffer = new (getComponentByteLenthAndClass(iaccessor.componentType)[1])(
+          bvs[iaccessor.bufferView].buffer
+        );
+
         if (!geometry.NORMAL) {
-          generateNormal(geometry, bvs, accessors);
+          generateNormal(geometry, indexBuffer, bvs, accessors);
         }
 
         if (!geometry.TANGENT) {
-          generateTangent(geometry, bvs, accessors);
+          generateTangent(geometry, indexBuffer, bvs, accessors);
         }
       }
     }
@@ -235,12 +343,26 @@ function processMesh(
   });
 }
 
-function generateNormal(geometry: {[aName: string]: number;}, bvs: any, accessors: any) {
-  const positions = bvs[accessors[geometry.POSITION]];
+function generateNormal(geometry: {[aName: string]: number}, indexBuffer: ArrayBufferView, bvs: any, accessors: any) {
+  const {buffer: positons, per: pPer} = getAttr(geometry.POSITION, bvs, accessors);
+  const {buffer: uvs, per: uvPer} = getAttr(geometry.TEXCOORD_0, bvs, accessors);
 }
 
-function generateTangent(geometry: {[aName: string]: number;}, bvs: any, accessors: any) {
+function generateTangent(geometry: {[aName: string]: number}, indexBuffer: ArrayBufferView, bvs: any, accessors: any) {
+  const {buffer: positons, per: pPer} = getAttr(geometry.POSITION, bvs, accessors);
+  const {buffer: uvs, per: uvPer} = getAttr(geometry.TEXCOORD_0, bvs, accessors);
+  const {buffer: normals, per: normalPer} = getAttr(geometry.NORMAL, bvs, accessors);
+}
 
+function getAttr(index: number, bvs: any, accessors: any) {
+  let {byteOffset, bufferView, componentType} = accessors[index];
+  let {buffer, byteStride} = bvs[bufferView];
+
+  byteStride = byteStride || getComponentByteLenthAndClass(componentType)[0];
+  return {
+    buffer: new Float32Array(buffer.buffer, byteOffset),
+    per: byteStride / 4
+  };
 }
 
 async function generateGLB(gltf: Object, dir: string) {
@@ -256,9 +378,8 @@ async function execOne(entity: IEntity, toGLB: boolean) {
 
   const {gltf, assets} = await processGlTF(entity);
   const gltfFiles: string[] = assets;
-  console.log(gltfFiles);
 
-  gltfFiles.push(await writeFile(path.resolve(entity.oDir, 'index.gltf'), JSON.stringify(gltf)));
+  gltfFiles.push(await writeFile(path.resolve(entity.oDir, 'index.gltf'), JSON.stringify(gltf, undefined, 2)));
 
   if (toGLB || entity.isGLB) {
     showInfo(`glb生成开始`);
