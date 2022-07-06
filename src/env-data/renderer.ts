@@ -7,7 +7,7 @@
 import * as GL from 'gl';
 import {indexes, vertexes} from './buffers';
 import {IImage} from './image';
-import {blurFrag, mipmapsFrag, skyboxFrag, vert} from './shaders';
+import {blurFrag, mipmapsVert, mipmapsFrag, skyboxFrag, vert} from './shaders';
 
 const R_PI = 1 / Math.PI;
 const SQRT_R_PI = Math.sqrt(R_PI);
@@ -39,7 +39,7 @@ class Renderer {
 
     this._createBuffers();
     this._createProgram('blur', vert, blurFrag);
-    this._createProgram('mipmaps', vert, mipmapsFrag);
+    this._createProgram('mipmaps', mipmapsVert, mipmapsFrag);
     this._createProgram('skybox', vert, skyboxFrag);
 
     gl.disable(gl.STENCIL_TEST);
@@ -113,6 +113,7 @@ class Renderer {
     const gl = this._gl;
     this._resizeExt.resize(size, size);
     const shader = this._shaders['mipmaps'];
+    // MipMaps and Bokeh Blur
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, size, size);
     gl.useProgram(shader.program);
