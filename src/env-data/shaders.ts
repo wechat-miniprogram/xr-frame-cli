@@ -16,6 +16,7 @@ precision highp int;
 varying highp vec2 v_uv;
 
 uniform sampler2D u_texture;
+uniform float u_isHDR;
 
 vec3 acesToneMapping(vec3 color) {
   return (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
@@ -33,7 +34,11 @@ void main()
 {
   vec4 color = texture2D(u_texture, v_uv);
 
-  gl_FragColor = vec4(LINEARtoSRGB(acesToneMapping(color.rgb)), 1.0);
+  if (u_isHDR == 0.) {
+    gl_FragColor = vec4(LINEARtoSRGB(color.rgb), 1.0);
+  } else {
+    gl_FragColor = vec4(LINEARtoSRGB(acesToneMapping(color.rgb)), 1.0);
+  }
 }
 `;
 

@@ -24,7 +24,8 @@ class Renderer {
     program: WebGLProgram,
     aPosition: number,
     aUV: number,
-    uTex: WebGLUniformLocation
+    uTex: WebGLUniformLocation,
+    uHDR: WebGLUniformLocation,
   }} = {};
   private _ib: WebGLBuffer;
   private _vb: WebGLBuffer;
@@ -77,6 +78,7 @@ class Renderer {
     gl.viewport(0, 0, width, height);
     gl.useProgram(shader.program);
     this._bindBuffers('skybox');
+    gl.uniform1f(shader.uHDR, image.hdr ? 1 : 0);
     gl.uniform1i(shader.uTex, 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -260,7 +262,9 @@ class Renderer {
     gl.deleteShader(v);
     gl.deleteShader(f);
 
-    const shader = this._shaders[name] = {program, aPosition: undefined, aUV: undefined, uTex: undefined};
+    const shader = this._shaders[name] = {
+      program, aPosition: undefined, aUV: undefined, uTex: undefined, uHDR: undefined
+    };
 
     for (let i = 0; i < 2; i += 1) {
       const {name} = gl.getActiveAttrib(program, i);
@@ -277,6 +281,8 @@ class Renderer {
       let {name} = gl.getActiveUniform(program, i);
       if (name === 'u_texture') {
         shader.uTex = gl.getUniformLocation(program, name);
+      } else if (name === 'u_isHDR') {
+        shader.uHDR = gl.getUniformLocation(program, name);
       }
     }
 
