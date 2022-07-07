@@ -10,6 +10,7 @@ import * as yargs from 'yargs';
 import * as gltfPipe from 'gltf-pipeline';
 import * as tmp from 'tmp';
 import * as shell from 'shelljs';
+import {vec2, vec3, vec4} from 'gl-matrix';
 import {
   showError,
   toSnakeCase,
@@ -108,6 +109,8 @@ async function processGlTF(entity: IEntity): Promise<{gltf: Object, assets: stri
     }
   }
 
+  showInfo('输入模型解析结束，开始处理Mesh数据...');
+
   const buffer = await processMeshes(gltf, buffers);
   assets.push(await writeFile(path.resolve(entity.oDir, 'buffer.bin'), buffer));
   gltf.buffers = [{uri: 'buffer.bin', byteLength: buffer.byteLength}];
@@ -187,10 +190,12 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
     processMesh(mesh, gltf.accessors, gltf.materials, gltf.bufferViews, geometries);
   });
 
+  showInfo('法线切线补充完成，开始处理几何数据...');
   const geoBuffers = geometries.map((geo, index) => {
     return processGeometry(index, geo, gltf.accessors, gltf.bufferViews);
   });
 
+  showInfo('交错几何数据组装完成，进行最后拼装...');
   return processBuffers(gltf.accessors, gltf.bufferViews, geoBuffers);
 }
 
@@ -311,7 +316,7 @@ function processMesh(
       return;
     }
 
-    const geometry = geometries[attributes.geometry];
+    const geometry = geometries[prim.geometry];
     delete prim.geometry;
 
     if (!geometry) {
@@ -327,7 +332,7 @@ function processMesh(
         const iaccessor = accessors[indices];
         const indexBuffer = new (getComponentByteLenthAndClass(iaccessor.componentType)[1])(
           bvs[iaccessor.bufferView].buffer
-        );
+        ) as Uint16Array;
 
         if (!geometry.NORMAL) {
           generateNormal(geometry, indexBuffer, bvs, accessors);
@@ -343,25 +348,112 @@ function processMesh(
   });
 }
 
-function generateNormal(geometry: {[aName: string]: number}, indexBuffer: ArrayBufferView, bvs: any, accessors: any) {
-  const {buffer: positons, per: pPer} = getAttr(geometry.POSITION, bvs, accessors);
-  const {buffer: uvs, per: uvPer} = getAttr(geometry.TEXCOORD_0, bvs, accessors);
+function generateNormal(geometry: {[aName: string]: number}, ibv: Uint16Array, bvs: any, accessors: any) {
+  const {buffer: positons, per: pPer, count} = getAttr(geometry.POSITION, bvs, accessors);
+  const normalsBuffer = Buffer.alloc(count * 3 * 4);
+  const normals = new Float32Array(normalsBuffer.buffer);
+
+  const vertexFaceNormals = new Array<vec3[]>(normals.length);
+  for (let i = 0; i < ibv.length; i += 3) {
+    const vis = [ibv[i], ibv[i + 1], ibv[i + 2]];
+    const pos = vis.map(vi => new Float32Array(3).map((_, offset) => positons[vi * pPer + offset]));
+    const edge0 = vec3.sub(vec3.create(), pos[0], pos[1]);
+    const edge1 = vec3.sub(vec3.create(), pos[0], pos[2]);
+    const normal = vec3.cross(vec3.create(), edge0, edge1);
+    vis.forEach(vi => {
+      vertexFaceNormals[vi] = vertexFaceNormals[vi] || [];
+      vertexFaceNormals[vi].push(normal);
+    });
+  }
+
+  vertexFaceNormals.forEach((faceNormals, index) => {
+    const n = faceNormals.reduce((pre, current) => vec3.add(pre, pre, current), vec3.create());
+    vec3.scale(n, n, 1 / n.length);
+    vec3.normalize(n, n);
+    normals.set(n, index * 3);
+  });
+
+  bvs.push({
+    buffer: normalsBuffer.buffer,
+    target: 34963,
+    byteOffset: 0,
+    byteLength: normalsBuffer.byteLength
+  });
+
+  accessors.push({
+    bufferView: bvs.length - 1,
+    componentType: 5126,
+    count,
+    type: 'VEC3'
+  });
+
+  geometry.NORMAL = accessors.length - 1;
 }
 
-function generateTangent(geometry: {[aName: string]: number}, indexBuffer: ArrayBufferView, bvs: any, accessors: any) {
-  const {buffer: positons, per: pPer} = getAttr(geometry.POSITION, bvs, accessors);
+function generateTangent(geometry: {[aName: string]: number}, ibv: Uint16Array, bvs: any, accessors: any) {
+  const {buffer: positons, per: pPer, count} = getAttr(geometry.POSITION, bvs, accessors);
   const {buffer: uvs, per: uvPer} = getAttr(geometry.TEXCOORD_0, bvs, accessors);
   const {buffer: normals, per: normalPer} = getAttr(geometry.NORMAL, bvs, accessors);
+  const tangentBuffer = Buffer.alloc(count * 4 * 4);
+  const tangents = new Float32Array(tangentBuffer.buffer);
+
+  const vertexFaceTangents = new Array<vec3[]>(tangents.length);
+  for (let i = 0; i < ibv.length; i += 3) {
+    const vis = [ibv[i], ibv[i + 1], ibv[i + 2]];
+    const pos = vis.map(vi => new Float32Array(3).map((_, offset) => positons[vi * pPer + offset]));
+    const uv = vis.map(vi => new Float32Array(3).map((_, offset) => uvs[vi * uvPer + offset]));
+    const edge0 = vec3.sub(vec3.create(), pos[0], pos[1]);
+    const edge1 = vec3.sub(vec3.create(), pos[0], pos[2]);
+    const deltaUV0 = vec2.sub(vec2.create(), uv[0], uv[1]);
+    const deltaUV1 = vec2.sub(vec2.create(), uv[0], uv[2]);
+    const det = deltaUV0[0] * deltaUV1[1] - deltaUV0[1] * deltaUV1[0];
+    let tangent = vec3.create();
+    if (Math.abs(det) > 0) {
+      const xAsixInUVSpace = [deltaUV1[1], -deltaUV0[1]];
+      tangent = vec3.add(tangent, vec3.scale(edge0, edge0, xAsixInUVSpace[0]), vec3.scale(edge1, edge1, xAsixInUVSpace[1]))
+    }
+    vis.forEach(vi => {
+      vertexFaceTangents[vi] = vertexFaceTangents[vi] || [];
+      vertexFaceTangents[vi].push(tangent);
+    });
+  }
+
+  vertexFaceTangents.forEach((faceTangents, index) => {
+    const tangent = faceTangents.reduce((pre, current) => vec3.add(pre, pre, current), vec3.create());
+    vec3.scale(tangent, tangent, 1 / tangent.length);
+    const normal = new Float32Array(3).map((_, offset) => normals[index * normalPer + offset]);
+    const t = vec3.cross(tangent, tangent, normal);
+    vec3.normalize(t, t);
+    tangents.set(t, index * 4);
+    tangents[index * 4 + 3] = 1;
+  });
+
+  bvs.push({
+    buffer: tangentBuffer.buffer,
+    target: 34963,
+    byteOffset: 0,
+    byteLength: tangentBuffer.byteLength
+  });
+
+  accessors.push({
+    bufferView: bvs.length - 1,
+    componentType: 5126,
+    count,
+    type: 'VEC4'
+  });
+
+  geometry.TANGENT = accessors.length - 1;
 }
 
 function getAttr(index: number, bvs: any, accessors: any) {
-  let {byteOffset, bufferView, componentType} = accessors[index];
+  let {byteOffset, bufferView, componentType, type, count} = accessors[index];
   let {buffer, byteStride} = bvs[bufferView];
 
-  byteStride = byteStride || getComponentByteLenthAndClass(componentType)[0];
+  byteStride = byteStride || (getComponentByteLenthAndClass(componentType)[0] * getTypeLenth(type));
   return {
-    buffer: new Float32Array(buffer.buffer, byteOffset),
-    per: byteStride / 4
+    buffer: new Float32Array(buffer, byteOffset),
+    per: byteStride / 4,
+    count
   };
 }
 
@@ -391,9 +483,9 @@ async function execOne(entity: IEntity, toGLB: boolean) {
     for (const fp of gltfFiles) {
       removeFile(fp);
     }
-
-    showInfo(`处理完成 ${path.join(entity.iDir, entity.file)}`);
   }
+
+  showInfo(`处理完成 ${path.join(entity.iDir, entity.file)}`);
 }
 
 export async function exec(argv: yargs.Arguments) {
