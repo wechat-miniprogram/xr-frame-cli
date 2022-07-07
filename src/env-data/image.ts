@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as sharp from 'sharp';
 import * as hdr from 'hdr';
 import * as exr from './tinyexr.js';
+import {showError} from '../utils.js';
+import {vec3} from 'gl-matrix';
 
 // XYZtoRGB Mat
 const XYZtoRGB = [
@@ -24,6 +26,14 @@ function MatrixDstVectorMultiply(mat, dstVec, offset) {
 	dstVec[offset + 0] = mat[0] * x + mat[1] * y + mat[2] * z;
 	dstVec[offset + 1] = mat[3] * x + mat[4] * y + mat[5] * z;
 	dstVec[offset + 2] = mat[6] * x + mat[7] * y + mat[8] * z;
+}
+
+function srgb2Rgb(v: number): number {
+  v = v / 255;
+  const v1 = Math.pow(v *  0.9478672986 + 0.0521327014, 2.4);
+  const v2 = v * 0.0773993808;
+
+  return Math.floor((v < 0.04045 ? v2 : v1) * 255);
 }
 
 export interface IImage {
@@ -79,7 +89,20 @@ export async function decodeImage(src: string): Promise<IImage> {
     });
   }
 
-  const {data, info} = await sharp(src).raw().toBuffer({resolveWithObject: true});
+  const instance = await sharp(src);
+  const info = await instance.metadata();
+  const {data} = await instance.raw().toBuffer({resolveWithObject: true});
+
+  if (info.space === 'srgb') {
+    const view = data;
+    for (let i = 0; i < view.length; i += info.channels) {
+      view[i] = srgb2Rgb(view[i]);
+      view[i + 1] = srgb2Rgb(view[i + 1]);
+      view[i + 2] = srgb2Rgb(view[i + 2]);
+    }
+  } else if (info.space !== 'rgb') {
+    showError(`图片色彩空间为'${info.space}'，不支持，仅支持'rgb'和'srgb'！`);
+  }
   
   return {
     width: info.width, height: info.height, premultiplyAlpha: info.premultiplied,

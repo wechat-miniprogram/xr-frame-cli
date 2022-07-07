@@ -116,7 +116,7 @@ async function processGlTF(entity: IEntity): Promise<{gltf: Object, assets: stri
   gltf.buffers = [{uri: 'buffer.bin', byteLength: buffer.byteLength}];
 
   gltf.extensionsUsed = gltf.extensionsUsed || [];
-  gltf.extensionsUsed.push('WX_prcessed_model');
+  gltf.extensionsUsed.push('WX_processed_model');
 
   return {gltf, assets};
 }
