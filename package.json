@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "gl": "^5.0.3",
+    "gl-matrix": "^3.4.3",
     "gltf-pipeline": "^3.0.5",
     "hdr": "^0.6.1",
     "inquirer": "^5.2.0",
