@@ -61,7 +61,9 @@ class Renderer {
     const specular = this._mipmaps(blured, width);
     const skybox = this._skybox(image, width, height);
 
+    // return {specular, skybox, diffuse: this._generateSH(image, height)};
     return {specular, skybox, diffuse: this._generateSH(image, height)};
+
   }
 
   private _skybox(image: IImage, width: number, height: number): Uint8Array {
