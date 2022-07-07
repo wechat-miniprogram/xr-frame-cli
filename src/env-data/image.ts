@@ -10,6 +10,22 @@ import * as sharp from 'sharp';
 import * as hdr from 'hdr';
 import * as exr from './tinyexr.js';
 
+// XYZtoRGB Mat
+const XYZtoRGB = [
+	3.2405, -1.5371, -0.4985,
+	-0.9693, 1.8760, 0.0416,
+	0.0556, -0.2040, 1.0572
+];
+
+function MatrixDstVectorMultiply(mat, dstVec, offset) {
+  const x = dstVec[offset + 0];
+  const y = dstVec[offset + 1];
+  const z = dstVec[offset + 2];
+	dstVec[offset + 0] = mat[0] * x + mat[1] * y + mat[2] * z;
+	dstVec[offset + 1] = mat[3] * x + mat[4] * y + mat[5] * z;
+	dstVec[offset + 2] = mat[6] * x + mat[7] * y + mat[8] * z;
+}
+
 export interface IImage {
   width: number;
   height: number;
@@ -42,9 +58,18 @@ export async function decodeImage(src: string): Promise<IImage> {
       const hdrloader = new hdr.loader();
 
       hdrloader.on('load', function() {
+        // console.log(this.headers);
+        // XYZ
+        const colorFloat32 = this.data as Float32Array;
+
+        // XYZ 2 RGB
+        for(let i = 0; i < colorFloat32.length / 3; i++) {
+          MatrixDstVectorMultiply(XYZtoRGB, colorFloat32, i * 3);
+        }
+
         resolve({
           width: this.width, height: this.height, premultiplyAlpha: false,
-          hdr: true, rgb: true, buffer: this.data
+          hdr: true, rgb: true, buffer: colorFloat32
         });
       });
 

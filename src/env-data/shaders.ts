@@ -21,10 +21,12 @@ vec3 acesToneMapping(vec3 color) {
   return (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
 }
 
+
 void main()
 {
   vec4 color = texture2D(u_texture, v_uv);
-  gl_FragColor = vec4(acesToneMapping(color.rgb), color.a);
+
+  gl_FragColor = vec4(acesToneMapping(color.rgb), 1.0);
 }
 `;
 
@@ -95,7 +97,7 @@ void main()
     // Bokeh Blur
     vec3 colBokeh = vec3(0.);
     vec3 tot = colBokeh;
-    float radius = 10.0 * logBlurLevel;
+    float radius = 1.0 * logBlurLevel;
     vec2 angle = vec2(radius / (float(BLUR_NUMBER) * resolution.x));
     float r = 0.0;
     for(int i = 0; i< BLUR_NUMBER; ++i){
@@ -112,7 +114,7 @@ void main()
     // Gaussian Blur
     vec3 colGaussian = vec3(0.);
 
-    float stepValue = 0.01 * logBlurLevel;
+    float stepValue = 0.05 * logBlurLevel;
 
     vec3 sum = vec3(0.0);
     // 3x3
@@ -131,9 +133,11 @@ void main()
 
     colGaussian = sum / 16.0;
 
-    vec3 colResult = mix(colBokeh, colGaussian, 0.5);
+    vec3 colResult = mix(colBokeh, colGaussian, 0.0);
 
     color = vec4(colResult, 1.0);
+
+    // color = texture2D(u_texture, uv);
     
     // RGBD
     float d = 1.;
