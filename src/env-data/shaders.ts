@@ -78,7 +78,6 @@ uniform sampler2D u_texture;
 
 mat2 rotate2D = mat2(cos(GOLDEN_ANGLE),sin(GOLDEN_ANGLE),-sin(GOLDEN_ANGLE),cos(GOLDEN_ANGLE));
 
-
 void main()
 {
   vec2 uv = v_uv;
@@ -99,12 +98,12 @@ void main()
     float logBlurLevel = lod;
 
     // default resolution
-    vec2 resolution = vec2(2048.0, 1024.0);
+    vec2 resolution = vec2(1024.0, 512.0);
 
     // Bokeh Blur
     vec3 colBokeh = vec3(0.);
     vec3 tot = colBokeh;
-    float radius = 1.0 * logBlurLevel;
+    float radius = 4.0 * logBlurLevel;
     vec2 angle = vec2(radius / (float(BLUR_NUMBER) * resolution.x));
     float r = 0.0;
     for(int i = 0; i< BLUR_NUMBER; ++i){
@@ -119,31 +118,46 @@ void main()
     colBokeh /= tot;
 
     // Gaussian Blur
-    vec3 colGaussian = vec3(0.);
+    vec3 colGaussian = vec3(0.0);
 
-    float stepValue = 0.01 * logBlurLevel;
+    float blurRadius = 6.0 * logBlurLevel;
 
-    vec3 sum = vec3(0.0);
-    // 3x3
-    // [6 7 8]
-    // [3 4 5]
-    // [0 1 2]
-    sum += 1.0 * texture2D(u_texture, uv + vec2(-stepValue, -stepValue)).rgb;
-    sum += 2.0 * texture2D(u_texture, uv + vec2(0.0, -stepValue)).rgb;
-    sum += 1.0 * texture2D(u_texture, uv + vec2(stepValue, -stepValue)).rgb;
-    sum += 2.0 * texture2D(u_texture, uv + vec2(-stepValue, 0.0)).rgb;
-    sum += 4.0 * texture2D(u_texture, uv + vec2(0.0, 0.0)).rgb;
-    sum += 2.0 * texture2D(u_texture, uv + vec2(stepValue, 0.0)).rgb;
-    sum += 1.0 * texture2D(u_texture, uv + vec2(-stepValue, stepValue)).rgb;
-    sum += 2.0 * texture2D(u_texture, uv + vec2(0.0, stepValue)).rgb;
-    sum += 1.0 * texture2D(u_texture, uv + vec2(stepValue, stepValue)).rgb;
+    // default width / height is close to 2 / 1
+    vec4 hozBlurOffset = vec4(blurRadius / resolution.x, 0.0, blurRadius / resolution.x, 0.0);
+    vec4 verBlurOffset = vec4(0.0, blurRadius / resolution.y, 0.0, blurRadius / resolution.y);
 
-    colGaussian = sum / 16.0;
+    // Gaussian hoz
+    vec4 uv01hoz = vec4(uv.x, uv.y, uv.x, uv.y) + hozBlurOffset * vec4(1.0, 1.0, -1.0, -1.0);
+    vec4 uv23hoz = vec4(uv.x, uv.y, uv.x, uv.y) + hozBlurOffset * vec4(1.0, 1.0, -1.0, -1.0) * 2.0;
+    vec4 uv45hoz = vec4(uv.x, uv.y, uv.x, uv.y) + hozBlurOffset * vec4(1.0, 1.0, -1.0, -1.0) * 6.0;
+    vec3 hozCol = vec3(0.0);
+    hozCol += 0.40 * texture2D(u_texture, uv).rgb;
+    hozCol += 0.15 * texture2D(u_texture, uv01hoz.xy).rgb;
+    hozCol += 0.15 * texture2D(u_texture, uv01hoz.zw).rgb;
+    hozCol += 0.10 * texture2D(u_texture, uv23hoz.xy).rgb;
+    hozCol += 0.10 * texture2D(u_texture, uv23hoz.zw).rgb;
+    hozCol += 0.05 * texture2D(u_texture, uv45hoz.xy).rgb;
+    hozCol += 0.05 * texture2D(u_texture, uv45hoz.zw).rgb;
 
-    vec3 colResult = mix(colBokeh, colGaussian, 0.5);
+    // Gaussian ver
+    vec4 uv01ver = vec4(uv.x, uv.y, uv.x, uv.y) + verBlurOffset * vec4(1.0, 1.0, -1.0, -1.0);
+    vec4 uv23ver = vec4(uv.x, uv.y, uv.x, uv.y) + verBlurOffset * vec4(1.0, 1.0, -1.0, -1.0) * 2.0;
+    vec4 uv45ver = vec4(uv.x, uv.y, uv.x, uv.y) + verBlurOffset * vec4(1.0, 1.0, -1.0, -1.0) * 6.0;
+    vec3 verCol = vec3(0.0);
+    verCol += 0.40 * texture2D(u_texture, uv).rgb;
+    verCol += 0.15 * texture2D(u_texture, uv01ver.xy).rgb;
+    verCol += 0.15 * texture2D(u_texture, uv01ver.zw).rgb;
+    verCol += 0.10 * texture2D(u_texture, uv23ver.xy).rgb;
+    verCol += 0.10 * texture2D(u_texture, uv23ver.zw).rgb;
+    verCol += 0.05 * texture2D(u_texture, uv45ver.xy).rgb;
+    verCol += 0.05 * texture2D(u_texture, uv45ver.zw).rgb;
+
+    colGaussian += mix(hozCol, verCol, 0.5);
+
+    vec3 colResult = mix(colBokeh, colGaussian, 0.8);
 
     color = vec4(colResult, 1.0);
-    
+
     // RGBD
     float d = 1.;
     float m = max(color.r, max(color.g, color.b));
