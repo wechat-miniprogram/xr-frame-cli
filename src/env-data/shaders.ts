@@ -22,6 +22,19 @@ vec3 acesToneMapping(vec3 color) {
 }
 
 
+vec3 SRGBtoLINEAR(vec3 linearIn)
+{
+  vec3 linOut = pow(linearIn.xyz,vec3(2.2));
+
+  return linOut;
+}
+vec3 LINEARtoSRGB(vec3 linearIn)
+{
+  vec3 linOut = pow(linearIn.xyz,vec3(1.0 / 2.2));
+
+  return linOut;
+}
+
 void main()
 {
   vec4 color = texture2D(u_texture, v_uv);
@@ -114,7 +127,7 @@ void main()
     // Gaussian Blur
     vec3 colGaussian = vec3(0.);
 
-    float stepValue = 0.05 * logBlurLevel;
+    float stepValue = 0.01 * logBlurLevel;
 
     vec3 sum = vec3(0.0);
     // 3x3
@@ -133,11 +146,9 @@ void main()
 
     colGaussian = sum / 16.0;
 
-    vec3 colResult = mix(colBokeh, colGaussian, 0.0);
+    vec3 colResult = mix(colBokeh, colGaussian, 0.5);
 
     color = vec4(colResult, 1.0);
-
-    // color = texture2D(u_texture, uv);
     
     // RGBD
     float d = 1.;
