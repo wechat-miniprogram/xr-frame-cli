@@ -22,12 +22,6 @@ vec3 acesToneMapping(vec3 color) {
 }
 
 
-vec3 SRGBtoLINEAR(vec3 linearIn)
-{
-  vec3 linOut = pow(linearIn.xyz,vec3(2.2));
-
-  return linOut;
-}
 vec3 LINEARtoSRGB(vec3 linearIn)
 {
   vec3 linOut = pow(linearIn.xyz,vec3(1.0 / 2.2));
@@ -39,7 +33,7 @@ void main()
 {
   vec4 color = texture2D(u_texture, v_uv);
 
-  gl_FragColor = vec4(acesToneMapping(color.rgb), 1.0);
+  gl_FragColor = vec4(LINEARtoSRGB(acesToneMapping(color.rgb)), 1.0);
 }
 `;
 
