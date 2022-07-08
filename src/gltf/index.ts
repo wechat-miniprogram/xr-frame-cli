@@ -8,8 +8,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as yargs from 'yargs';
 import * as gltfPipe from 'gltf-pipeline';
-import * as tmp from 'tmp';
-import * as shell from 'shelljs';
+import * as mime from 'mime';
 import {vec2, vec3, vec4} from 'gl-matrix';
 import {
   showError,
@@ -78,7 +77,9 @@ function getEntity(fp: string, o: string): IEntity {
   return {iDir, file, isGLB, oDir};
 }
 
-async function processGlTF(entity: IEntity): Promise<{gltf: Object, assets: string[];}> {
+async function processGlTF(entity: IEntity): Promise<{
+  gltf: Object, buffer: Buffer, assets: {[key: string]: Buffer};
+}> {
   let gltf: any;
   let separateResources: {[key: string]: Buffer;};
   const assets: string[] = [];
@@ -102,23 +103,24 @@ async function processGlTF(entity: IEntity): Promise<{gltf: Object, assets: stri
 
   for (const relativePath in separateResources) {
     const op = path.resolve(entity.oDir, relativePath);
-    if (!/.bin$/.test(op)) {
-      assets.push(await writeFile(op, separateResources[relativePath]));
-    } else {
+    if (/.bin$/.test(op)) {
       buffers[relativePath] = separateResources[relativePath];
     }
+  }
+
+  for (const relativePath in buffers) {
+    delete separateResources[relativePath];
   }
 
   showInfo('输入模型解析结束，开始处理Mesh数据...');
 
   const buffer = await processMeshes(gltf, buffers);
-  assets.push(await writeFile(path.resolve(entity.oDir, 'buffer.bin'), buffer));
   gltf.buffers = [{uri: 'buffer.bin', byteLength: buffer.byteLength}];
 
   gltf.extensionsUsed = gltf.extensionsUsed || [];
   gltf.extensionsUsed.push('WX_processed_model');
 
-  return {gltf, assets};
+  return {gltf, buffer, assets: separateResources};
 }
 
 async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
@@ -457,35 +459,121 @@ function getAttr(index: number, bvs: any, accessors: any) {
   };
 }
 
-async function generateGLB(gltf: Object, dir: string) {
-  const {glb} = await gltfPipe.gltfToGlb(gltf, {
-    resourceDirectory: dir
+async function generateGLB(gltf: any, buffer: Buffer, assets: {[rp: string]: Buffer | string}) {
+  const bvs = gltf.bufferViews;
+  const bvsLenOrig = bvs.length;
+  const bin2RPs = Object.keys(assets);
+  const asset2BV: {[rp: string]: number} = {};
+  let offset: number = buffer.byteLength;
+  const bin2Buffers = bin2RPs.map(rp => {
+    let b = assets[rp];
+    if (typeof b === 'string') {
+      b = Buffer.from(b);
+    }
+    const ab = align4(b);
+    bvs.push({buffer: 0, byteOffset: offset, byteLength: b.byteLength + ab.byteLength});
+    asset2BV[rp] = bvs.length - 1;
+    offset += b.byteLength + ab.byteLength;
+    return Buffer.concat([b, ab]);
   });
 
+  gltf.images?.forEach(img => {
+    if (asset2BV[img.uri] === undefined) {
+      return;
+    }
+
+    img.bufferView = asset2BV[img.uri];
+    img.mimeType = mime.getType(getImageExtension(bin2Buffers[img.bufferView - bvsLenOrig]));
+    delete img.uri;
+  });
+
+  gltf.shaders?.forEach(shader => {
+    if (asset2BV[shader.uri] === undefined) {
+      return;
+    }
+
+    shader.bufferView = asset2BV[shader.uri];
+    delete shader.uri;
+  });
+
+  const bin2Buffer = Buffer.concat(bin2Buffers);
+  gltf.buffers = [{byteLength: buffer.byteLength + bin2Buffer.byteLength}];
+  const json = Buffer.from(JSON.stringify(gltf));
+  const jsonAlign = align4(json);
+
+  const glb = Buffer.concat([
+    new Uint8Array(new Uint32Array([
+      0x46546C67,
+      2,
+      28 + json.byteLength + jsonAlign.byteLength + buffer.byteLength + bin2Buffer.byteLength,
+      json.byteLength,
+      0x4e4f534a
+    ]).buffer),
+    json,
+    jsonAlign,
+    new Uint8Array(new Uint32Array([
+      buffer.byteLength + bin2Buffer.byteLength,
+      0x004e4942
+    ]).buffer),
+    buffer,
+    bin2Buffer
+  ]);
+
   return glb;
+}
+
+function getImageExtension(data: Buffer) {
+  const header = data.slice(0, 2);
+  const webpHeaderRIFFChars = data.slice(0, 4);
+  const webpHeaderWEBPChars = data.slice(8, 12);
+
+  if (header.equals(Buffer.from([0x42, 0x4D]))) {
+      return '.bmp';
+  } else if (header.equals(Buffer.from([0x47, 0x49]))) {
+      return '.gif';
+  } else if (header.equals(Buffer.from([0xFF, 0xD8]))) {
+      return '.jpg';
+  } else if (header.equals(Buffer.from([0x89, 0x50]))) {
+      return '.png';
+  } else if (header.equals(Buffer.from([0xAB, 0x4B]))) {
+      return '.ktx';
+  } else if (header.equals(Buffer.from([0x48, 0x78]))) {
+      return '.crn';
+  } else if (webpHeaderRIFFChars.equals(Buffer.from([0x52, 0x49, 0x46, 0x46])) && webpHeaderWEBPChars.equals(Buffer.from([0x57, 0x45, 0x42, 0x50]))) {
+      // See https://developers.google.com/speed/webp/docs/riff_container#webp_file_header
+      return '.webp';
+  }
+
+  throw new Error('Image data does not have valid header');
+}
+
+
+function align4(buffer: Buffer | ArrayBuffer) {
+  const det = buffer.byteLength % 4;
+  return Buffer.alloc(4 - det);
 }
 
 async function execOne(entity: IEntity, toGLB: boolean) {
   showInfo(`处理开始 ${path.join(entity.iDir, entity.file)}`);
 
-  const {gltf, assets} = await processGlTF(entity);
-  const gltfFiles: string[] = assets;
-
-  gltfFiles.push(await writeFile(path.resolve(entity.oDir, 'index.gltf'), JSON.stringify(gltf, undefined, 2)));
+  const {gltf, buffer, assets} = await processGlTF(entity);
 
   if (toGLB || entity.isGLB) {
     showInfo(`glb生成开始`);
-    const glb = await generateGLB(gltf, entity.oDir);
+    const glb = await generateGLB(gltf, buffer, assets);
     writeFile(path.resolve(entity.oDir, 'index.glb'), glb);
     showInfo(`glb生成结束`);
-
-    showInfo(`移除临时文件...`);
-    for (const fp of gltfFiles) {
-      removeFile(fp);
+  } else {
+    showInfo(`产物开始写入目标目录 ${entity.oDir}`);
+    await writeFile(path.resolve(entity.oDir, 'index.gltf'), JSON.stringify(gltf, undefined, 2));
+    await writeFile(path.resolve(entity.oDir, 'buffer.bin'), buffer);
+    for (const relativePath in assets) {
+      await writeFile(path.resolve(entity.oDir, relativePath), assets[relativePath]);
     }
+    showInfo(`产物写入完成`);
   }
 
-  showInfo(`处理完成 ${path.join(entity.iDir, entity.file)}`);
+  showInfo(`处理完成 ${path.join(entity.iDir, entity.file)} to ${path.join(entity.oDir, 'index.' + (toGLB || entity.isGLB ? 'glb' : 'gltf'))}`);
 }
 
 export async function exec(argv: yargs.Arguments) {

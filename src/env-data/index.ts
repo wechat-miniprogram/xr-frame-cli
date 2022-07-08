@@ -49,7 +49,7 @@ function getSize(image: IImage, size: number): {width: number, height: number} {
   return {width: toPOT(width), height: toPOT(height)};
 }
 
-async function execOne(input: string, output: string, size?: number) {
+async function execOne(input: string, output: string, size?: number, bin?: boolean) {
   showInfo(`处理输入'${input}'`);
 
   if (!fs.existsSync(input)) {
@@ -73,26 +73,58 @@ async function execOne(input: string, output: string, size?: number) {
   if (width / height !== 2) {
     showError(`输入图片宽高比必须接近2:1 现在为${image.width}:${image.height}`)
   }
+
+  if (!fs.existsSync(output)) {
+    fs.mkdirSync(output);
+  }
   
   let {specular, skybox, diffuse} = renderer.process(image, width, height);
   const specularImg = await encodeImage(specular, width, width, hdr);
   const skyboxImg = await encodeImage(skybox, width, height, !rgb);
 
-  if (!fs.existsSync(output)) {
-    fs.mkdirSync(output);
+  const json = {
+    skybox: {type: '2D', half: false, map: undefined},
+    specular: {type: '2D', rgbd: hdr, mipmaps: true, mipmapCount: 5, map: undefined},
+    diffuse: {coefficients: diffuse}
+  };
+
+  if (!bin) {
+    const skyboxPath = json.skybox.map = `skybox.${!rgb ? 'png' : 'jpg'}`;
+    const specularPath = json.specular.map = `specular.${hdr ? 'png' : 'jpg'}`;
+    fs.writeFileSync(path.resolve(output, specularPath), specularImg);
+    fs.writeFileSync(path.resolve(output, skyboxPath), skyboxImg);
+    fs.writeFileSync(path.resolve(output, 'data.json'), JSON.stringify(json, null, 2), {encoding: 'utf-8'});
+  } else {
+    const prefix = Buffer.from('wxxr-env', 'utf-8');
+    const skyboxImgFill = align4(skyboxImg);
+    json.skybox.map = {
+      offset: 0, length: skyboxImg.byteLength,
+      type: rgb ? 'image/jpg' : 'image/png'
+    };
+    const specularImgFill = align4(specularImg);
+    json.specular.map = {
+      offset: skyboxImg.byteLength + skyboxImgFill.byteLength, length: specularImg.byteLength,
+      type: !hdr ? 'image/jpg' : 'image/png'
+    };
+    const content = Buffer.from(JSON.stringify(json), 'utf-8');
+    const jsonLen = new Uint32Array([content.byteLength]);
+    const binFill = align4(content);
+    const binStart = new Uint32Array([content.byteLength + binFill.byteLength]);
+    const finalData = Buffer.concat([
+      prefix, new Uint8Array(jsonLen.buffer), new Uint8Array(binStart.buffer),
+      content, binFill,
+      new Uint8Array(skyboxImg), skyboxImgFill,
+      new Uint8Array(specularImg), specularImgFill
+    ]);
+    fs.writeFileSync(path.resolve(output, 'data.bin'), finalData);
   }
 
-  const specularPath = `specular.${hdr ? 'png' : 'jpg'}`;
-  const skyboxPath = `skybox.${!rgb ? 'png' : 'jpg'}`;
-  fs.writeFileSync(path.resolve(output, specularPath), specularImg);
-  fs.writeFileSync(path.resolve(output, skyboxPath), skyboxImg);
-  fs.writeFileSync(path.resolve(output, 'data.json'), JSON.stringify({
-    skybox: {type: '2D', half: false, map: skyboxPath},
-    specular: {type: '2D', rgbd: hdr, mipmaps: true, mipmapCount: 5, map: specularPath},
-    diffuse: {coefficients: diffuse}
-  }, null, 2), {encoding: 'utf-8'});
+  showInfo(`输出完成 '${input}' to '${output}/data.${bin ? 'bin' : 'json'}'`);
+}
 
-  showInfo(`输出完成 '${input}'`);
+function align4(buffer: Buffer | ArrayBuffer) {
+  const det = buffer.byteLength % 4;
+  return Buffer.alloc(4 - det);
 }
 
 function getOutput(isFolder: boolean, i: string, o?: string): string {
@@ -112,7 +144,7 @@ function getOutput(isFolder: boolean, i: string, o?: string): string {
 }
 
 export async function exec(argv: yargs.Arguments) {
-  let {input, output, size} = argv;
+  let {input, output, size, bin} = argv;
 
   if (!input) {
     showError('必要参数`input`不存在！');
@@ -146,6 +178,6 @@ export async function exec(argv: yargs.Arguments) {
   }
 
   for (let index = 0; index < inputs.length; index += 1) {
-    await execOne(inputs[index], outputs[index], size); 
+    await execOne(inputs[index], outputs[index], size, bin); 
   }
 }

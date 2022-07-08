@@ -10,7 +10,6 @@ import * as sharp from 'sharp';
 import * as hdr from 'hdr';
 import * as exr from './tinyexr.js';
 import {showError} from '../utils.js';
-import {vec3} from 'gl-matrix';
 
 // XYZtoRGB Mat
 const XYZtoRGB = [
