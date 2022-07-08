@@ -49,6 +49,7 @@
     "gltf-pipeline": "^3.0.5",
     "hdr": "^0.6.1",
     "inquirer": "^5.2.0",
+    "mime": "^3.0.0",
     "ncp": "^2.0.0",
     "recursive-copy": "^2.0.9",
     "remote-origin-url": "^1.0.0",
