@@ -117,7 +117,7 @@ class Renderer {
     const gl = this._gl;
     this._resizeExt.resize(size, size);
     const shader = this._shaders['mipmaps'];
-    // MipMaps and Bokeh Blur
+    // MipMaps and Bokeh Gaussian Blur
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, size, size);
     gl.useProgram(shader.program);
