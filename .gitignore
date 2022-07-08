@@ -4,3 +4,4 @@ test
 package-lock.json
 .vscode
 test
+.DS_Store
