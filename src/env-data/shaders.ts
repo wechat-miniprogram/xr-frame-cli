@@ -126,16 +126,16 @@ void main()
   vec4 color = texture2D(u_texture, uv);
 
   // RGBD
-  // float d = 1.;
-  // float m = max(color.r, max(color.g, color.b));
-  // if (m > 1.) {
-  //   d = 1. / m;
-  // }
+  float d = 1.;
+  float m = max(color.r, max(color.g, color.b));
+  if (m > 1.) {
+    d = 1. / m;
+  }
 
-  // color.r = color.r * d;
-  // color.g = color.g * d;
-  // color.b = color.b * d;
-  // color.a = d;
+  color.r = color.r * d;
+  color.g = color.g * d;
+  color.b = color.b * d;
+  color.a = d;
 
   gl_FragColor = color;
 }
