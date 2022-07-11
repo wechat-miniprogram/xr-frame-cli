@@ -111,14 +111,15 @@ export async function decodeImage(src: string): Promise<IImage> {
 
 export async function encodeImage(
   colorBuffer: ArrayBufferView,
-  width: number, height: number, png: boolean
+  width: number, height: number,
+  png: boolean, palette: boolean = false
 ): Promise<ArrayBuffer> {
   const img = sharp(colorBuffer, {
     raw: {width, height, channels: 4, premultiplied: false}
   })
   
   if (png) {
-    return img.png().toBuffer();
+    return img.png({palette}).toBuffer();
   }
   
   return img.jpeg().toBuffer();

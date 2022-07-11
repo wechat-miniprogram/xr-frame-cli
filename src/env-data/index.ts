@@ -79,8 +79,8 @@ async function execOne(input: string, output: string, size?: number, bin?: boole
   }
   
   let {specular, skybox, diffuse} = renderer.process(image, width, height);
-  const specularImg = await encodeImage(specular, width, width, hdr);
   const skyboxImg = await encodeImage(skybox, width, height, !rgb);
+  const specularImg = await encodeImage(specular, width, width, hdr, true);
 
   const json = {
     skybox: {type: '2D', half: false, map: undefined},
