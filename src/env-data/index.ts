@@ -84,7 +84,7 @@ async function execOne(input: string, output: string, size?: number, bin?: boole
 
   const json = {
     skybox: {type: '2D', half: false, map: undefined},
-    specular: {type: '2D', rgbd: hdr, mipmaps: true, mipmapCount: 5, map: undefined},
+    specular: {type: '2D', rgbd: hdr, mipmaps: true, mipmapCount: 8, map: undefined},
     diffuse: {coefficients: diffuse}
   };
 
