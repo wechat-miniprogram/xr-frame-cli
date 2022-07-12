@@ -7,7 +7,7 @@
 import * as GL from 'gl';
 import {indexes, vertexes} from './buffers';
 import {IImage} from './image';
-import {blurFrag, mipmapsVert, mipmapsFrag, skyboxFrag, vert} from './shaders';
+import {simpleFrag, blurFrag, mipmapsVert, mipmapsFrag, skyboxFrag, vert} from './shaders';
 
 const R_PI = 1 / Math.PI;
 const SQRT_R_PI = Math.sqrt(R_PI);
@@ -16,6 +16,13 @@ const SQRT_R_PI5 = Math.sqrt(5 * R_PI);
 const SQRT_R_PI15 = Math.sqrt(15 * R_PI);
 const SH9_LMS = ['00', '1-1', '10', '11', '2-2', '2-1', '20', '21', '22'];
 
+interface LodMap {
+  [index: number]: {
+    frameBuffer,
+    renderTexture
+  },
+  length: number
+}
 class Renderer {
   private _gl: WebGLRenderingContext;
   private _resizeExt: any;
@@ -26,10 +33,16 @@ class Renderer {
     aUV: number,
     uTex: WebGLUniformLocation,
     uHDR: WebGLUniformLocation,
+    uBlurOffset: WebGLUniformLocation
   }} = {};
   private _ib: WebGLBuffer;
   private _vb: WebGLBuffer;
-  private _rtCache: {[width: number]: WebGLFramebuffer} = {};
+  private _rtCache: {
+    [width: number]: {
+      frameBuffer: WebGLFramebuffer,
+      renderTexture: WebGLTexture,
+    }
+  } = {};
   private _texCache: {[key: string]: WebGLFramebuffer} = {};
   private _resPixels: {[size: number]: Uint8Array} = {};
 
@@ -39,6 +52,7 @@ class Renderer {
     this._floatExt = this._gl.getExtension('OES_texture_float');
 
     this._createBuffers();
+    this._createProgram('simple', vert, simpleFrag);
     this._createProgram('blur', vert, blurFrag);
     this._createProgram('mipmaps', mipmapsVert, mipmapsFrag);
     this._createProgram('skybox', vert, skyboxFrag);
@@ -58,8 +72,8 @@ class Renderer {
   } {
     const gl = this._gl;
 
-    const blured = this._blur(image, width, height);
-    const specular = this._mipmaps(blured, width);
+    const lodMap = this._blur(image, width);
+    const specular = this._mipmaps(lodMap, width);
     const skybox = this._skybox(image, width, height);
 
     return {specular, skybox, diffuse: this._generateSH(image, height)};
@@ -70,9 +84,11 @@ class Renderer {
     this._resizeExt.resize(width, height);
     const shader = this._shaders['skybox'];
     const tex = this._getTexture(image.width, image.height, image.rgb, image.hdr, image.premultiplyAlpha, image.buffer);
-    const rt = this._getRT(width, height);
+    const rtData = this._getRT(width, height);
+    const fb = rtData.frameBuffer;
+    const rt = rtData.renderTexture;
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, rt);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.viewport(0, 0, width, height);
     gl.useProgram(shader.program);
     this._bindBuffers('skybox');
@@ -93,37 +109,95 @@ class Renderer {
     return pixels;
   }
 
-  private _blur(image: IImage, width: number, height: number): WebGLFramebuffer {
+
+  private _blur(image: IImage, size: number): LodMap {
     const gl = this._gl;
-    const shader = this._shaders['blur'];
+    const simpleShader = this._shaders['simple'];
+    const blurShader = this._shaders['blur'];
     const tex = this._getTexture(image.width, image.height, image.rgb, image.hdr, image.premultiplyAlpha, image.buffer);
-    const rt = this._getRT(width, height);
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, rt);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(shader.program);
-    this._bindBuffers('blur');
-    gl.uniform1i(shader.uTex, 0);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    const blurRadius = 3.0;
+    const resolutionX = size;
+    const resolutionY = size / 2;
 
-    return rt;
+    const lodNumber = 8;
+    const lodMap: LodMap = {length: 0};
+    // set LOD MAX as lodNumber
+    for (let i = 0; i < lodNumber; i++) {
+      const rtData = this._getRT(image.width, image.height);
+      const fb = rtData.frameBuffer;
+      const rt = rtData.renderTexture;
+
+      // draw basic texture
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.viewport(0, 0, image.width, image.height);
+      gl.useProgram(simpleShader.program);
+      this._bindBuffers('simple');
+      gl.uniform1i(simpleShader.uTex, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+      // Bokeh and Gaussian Blur
+      if (i > 0) {
+        for (let j = 0; j < i + 1; j++) {
+          // Horz blur
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+          gl.viewport(0, 0, image.width, image.height);
+          gl.useProgram(blurShader.program);
+          this._bindBuffers('blur');
+          gl.uniform4f(blurShader.uBlurOffset, blurRadius / resolutionX, 0, blurRadius / resolutionX, 0);
+          gl.uniform1i(blurShader.uTex, 0);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, rt);
+          gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+          // Vert blur
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+          gl.viewport(0, 0, image.width, image.height);
+          gl.useProgram(blurShader.program);
+          this._bindBuffers('blur');
+          gl.uniform4f(blurShader.uBlurOffset, 0, blurRadius / resolutionY, 0, blurRadius / resolutionY);
+          gl.uniform1i(blurShader.uTex, 0);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, rt);
+          gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+        }
+      }
+      lodMap[i] = {
+        frameBuffer: fb,
+        renderTexture: rt
+      };
+      lodMap.length++;
+    }
+
+    return lodMap;
   }
 
-  private _mipmaps(source: WebGLFramebuffer, size: number): Uint8Array {
+  private _mipmaps(lodMap: LodMap, size: number): Uint8Array {
     const gl = this._gl;
     this._resizeExt.resize(size, size);
     const shader = this._shaders['mipmaps'];
-    // MipMaps and Bokeh Gaussian Blur
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, size, size);
-    gl.useProgram(shader.program);
-    this._bindBuffers('mipmaps');
-    gl.uniform1i(shader.uTex, 0);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    
+    let offsetY = 0;
+    let mipmapSize = size;
+
+    const lodLenght = lodMap.length;
+    for (let i = 0; i < lodLenght; i++) {
+      const lod = lodMap[i];
+      // Main Frame
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      // draw lod RenderTexture
+      gl.viewport(0, offsetY, mipmapSize, mipmapSize / 2);
+      gl.useProgram(shader.program);
+      this._bindBuffers('mipmaps');
+      gl.uniform1i(shader.uTex, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, lod.renderTexture);
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+      offsetY += mipmapSize / 2;
+      mipmapSize /= 2;
+    }
 
     const len = size * size * 4;
     let pixels = this._resPixels[len];
@@ -223,9 +297,9 @@ class Renderer {
   }
 
   private _getRT(width: number, height: number) {
-    if (this._rtCache[width]) {
-      return this._rtCache[width];
-    }
+    // if (this._rtCache[width]) {
+    //   return this._rtCache[width];
+    // }
 
     const gl = this._gl;
 
@@ -234,9 +308,16 @@ class Renderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
 
-    this._rtCache[width] = fb;
+    // this._rtCache[width] = {
+    //   renderTexture: tex,
+    //   frameBuffer: fb
+    // };
 
-    return fb;
+    // return this._rtCache[width];
+    return {
+      renderTexture: tex,
+      frameBuffer: fb
+    };
   }
 
   private _createProgram(name: string, vs: string, fs: string) {
@@ -261,7 +342,7 @@ class Renderer {
     gl.deleteShader(f);
 
     const shader = this._shaders[name] = {
-      program, aPosition: undefined, aUV: undefined, uTex: undefined, uHDR: undefined
+      program, aPosition: undefined, aUV: undefined, uTex: undefined, uHDR: undefined, uBlurOffset: undefined
     };
 
     for (let i = 0; i < 2; i += 1) {
@@ -281,6 +362,8 @@ class Renderer {
         shader.uTex = gl.getUniformLocation(program, name);
       } else if (name === 'u_isHDR') {
         shader.uHDR = gl.getUniformLocation(program, name);
+      } else if (name === 'u_blurOffset') {
+        shader.uBlurOffset = gl.getUniformLocation(program, name);
       }
     }
 

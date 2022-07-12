@@ -42,7 +42,7 @@ void main()
 }
 `;
 
-export const blurFrag = `
+export const simpleFrag = `
 precision mediump float;
 precision highp int;
 varying highp vec2 v_uv;
@@ -55,28 +55,13 @@ void main()
 }
 `;
 
-export const mipmapsVert = `
-attribute vec3 a_position;
-attribute highp vec2 a_uv;
-varying highp vec2 v_uv;
-varying highp vec3 v_localPos;
-
-
-void main()
-{
-    v_uv = a_uv;
-    v_localPos = a_position;
-    gl_Position = vec4(a_position, 1.0);
-}
-`;
-
-
-export const mipmapsFrag = `
+export const blurFrag = `
 precision mediump float;
 precision highp int;
 varying highp vec2 v_uv;
 
 uniform sampler2D u_texture;
+uniform vec4 u_blurOffset;
 
 #define GOLDEN_ANGLE 2.40 //(3.0-sqrt(5))*PI
 #define BLUR_NUMBER 1024
@@ -105,88 +90,53 @@ vec3 GaussianBlur(sampler2D map, vec2 uv, vec4 blurOffset) {
 void main()
 {
   vec2 uv = v_uv;
-  float logv = log2(1. - uv.y);
-  float lod = floor(-logv);
+  // Gaussian Blur
+  vec3 colGaussian = GaussianBlur(u_texture, uv, u_blurOffset);
 
-  // MINMAPS
-  float scale = pow(2., lod);
-  uv.x *= scale;
-  uv.y = 2. * (uv.y * scale - scale + 1.);
+  vec4 color = vec4(colGaussian, 1.0);
 
-  if (uv.x > 1.) {
-    gl_FragColor = vec4(1., 1., 1., 1.);
-  } else {
-    // HDR
-    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+  gl_FragColor = color;
+}
+`;
 
-    float logBlurLevel = lod;
+export const mipmapsVert = `
+attribute vec3 a_position;
+attribute highp vec2 a_uv;
+varying highp vec2 v_uv;
 
-    // default resolution
-    vec2 resolution = vec2(2048.0, 1024.0);
+void main()
+{
+    v_uv = a_uv;
+    gl_Position = vec4(a_position, 1.0);
+}
+`;
 
-    // Bokeh Blur
-    vec3 colBokeh = vec3(0.);
-    vec3 tot = colBokeh;
-    float radius = 1.0 * logBlurLevel;
-    vec2 angle = vec2(radius / (float(BLUR_NUMBER) * resolution.x));
-    float r = 0.0;
-    for(int i = 0; i< BLUR_NUMBER; ++i){
-      r += 1.;
-      angle = rotate2D * angle;
-      vec3 c = texture2D(u_texture, uv + r * angle).rgb;
-    	c = c * c * 1.5;
-      vec3 bokeh = pow(c, vec3(4.0));
-      colBokeh += c * bokeh;
-      tot += bokeh;
-    }
-    colBokeh /= tot;
+export const mipmapsFrag = `
+precision mediump float;
+precision highp int;
+varying highp vec2 v_uv;
 
-    // Gaussian Blur
-    vec3 colGaussian = texture2D(u_texture, uv).rgb;
+uniform sampler2D u_texture;
+uniform int u_lodIndex;
 
-    // subColor
-    if (logBlurLevel >= 1.0) {
-      float blurRadius = 3.0 + logBlurLevel;
-      float iteration = 12.0 + logBlurLevel * 6.0;
+void main()
+{
+  vec2 uv = v_uv;
+  // HDR
+  vec4 color = texture2D(u_texture, uv);
 
-      for (float i = 0.0; i < iteration; i++) {
-        float subBlurRadius = blurRadius + i * 0.1 ;
-        
-        // default width / height is close to 2 / 1
-        vec4 hozBlurOffset = vec4(subBlurRadius / resolution.x, 0.0, subBlurRadius / resolution.x, 0.0);
-        vec4 verBlurOffset = vec4(0.0, subBlurRadius / resolution.y, 0.0, subBlurRadius / resolution.y);
-        // Gaussian hoz
-        vec3 hozCol = GaussianBlur(u_texture, uv, hozBlurOffset);
-        // Gaussian ver
-        vec3 verCol = GaussianBlur(u_texture, uv, verBlurOffset);
-
-        vec3 colSub = linearMix(hozCol, verCol, 0.5);
-
-        if (i == 0.0) {
-          colGaussian = colSub;
-        } else {
-          colGaussian = linearMix(colGaussian, colSub, (iteration - i) * 2.0 / 3.0 / iteration);
-        }
-      }
-    }
-
-    vec3 colResult = linearMix(colBokeh, colGaussian, 0.8);
-
-    color = vec4(colResult, 1.0);
-
-    // RGBD
-    float d = 1.;
-    float m = max(color.r, max(color.g, color.b));
-    if (m > 1.) {
-      d = 1. / m;
-    }
-  
-    color.r = color.r * d;
-    color.g = color.g * d;
-    color.b = color.b * d;
-    color.a = d;
-
-    gl_FragColor = color;
+  // RGBD
+  float d = 1.;
+  float m = max(color.r, max(color.g, color.b));
+  if (m > 1.) {
+    d = 1. / m;
   }
+
+  color.r = color.r * d;
+  color.g = color.g * d;
+  color.b = color.b * d;
+  color.a = d;
+
+  gl_FragColor = color;
 }
 `;
