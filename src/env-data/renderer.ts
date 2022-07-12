@@ -116,7 +116,7 @@ class Renderer {
     const blurShader = this._shaders['blur'];
     const tex = this._getTexture(image.width, image.height, image.rgb, image.hdr, image.premultiplyAlpha, image.buffer);
 
-    const blurRadius = 3.0;
+    const blurRadius = 2.0;
     const resolutionX = size;
     const resolutionY = size / 2;
 
@@ -161,7 +161,7 @@ class Renderer {
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, rt);
           gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-        }
+        } 
       }
       lodMap[i] = {
         frameBuffer: fb,
