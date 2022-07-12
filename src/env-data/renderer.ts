@@ -140,7 +140,7 @@ class Renderer {
 
       // Bokeh and Gaussian Blur
       if (i > 0) {
-        for (let j = 0; j < i + 1; j++) {
+        for (let j = 0; j < i; j++) {
           // Horz blur
           gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
           gl.viewport(0, 0, image.width, image.height);
