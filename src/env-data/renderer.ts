@@ -65,18 +65,18 @@ class Renderer {
   }
 
   // return png, if hdr, use rgbd
-  public process(image: IImage, width: number, height: number): {
+  public process(image: IImage, skyW: number, skyH: number, specSize: number): {
     specular: Uint8Array,
     skybox: Uint8Array,
     diffuse: number[][]
   } {
     const gl = this._gl;
 
-    const lodMap = this._blur(image, width);
-    const specular = this._mipmaps(lodMap, width);
-    const skybox = this._skybox(image, width, height);
+    const lodMap = this._blur(image, specSize);
+    const specular = this._mipmaps(lodMap, specSize);
+    const skybox = this._skybox(image, skyW, skyH);
 
-    return {specular, skybox, diffuse: this._generateSH(image, height)};
+    return {specular, skybox, diffuse: this._generateSH(image, image.height)};
   }
 
   private _skybox(image: IImage, width: number, height: number): Uint8Array {
@@ -216,7 +216,7 @@ class Renderer {
     const sizeY = dstH / 2;
     const a = (4 * Math.PI / sizeX / sizeY) * (hdr ? 1 : 1 / 255);
     const sh9 = new Array(9).fill(0).map(() => [0, 0, 0]);
-    
+
     for (let y = 0; y < sizeY; y += 1) {
       for (let x = 0; x < sizeX; x += 1) {
         const theta = Math.acos(1 - x * 2.0 / (sizeX - 1));

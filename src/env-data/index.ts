@@ -49,7 +49,7 @@ function getSize(image: IImage, size: number): {width: number, height: number} {
   return {width: toPOT(width), height: toPOT(height)};
 }
 
-async function execOne(input: string, output: string, size?: number, bin?: boolean) {
+async function execOne(input: string, output: string, size?: number[], bin?: boolean) {
   showInfo(`处理输入'${input}'`);
 
   if (!fs.existsSync(input)) {
@@ -68,9 +68,10 @@ async function execOne(input: string, output: string, size?: number, bin?: boole
     showError(`解码异常 ${error}`);
   }
   const {hdr, rgb} = image;
-  const {width, height} = getSize(image, size);
+  const {width: skyW, height: skyH} = getSize(image, size?.[0]);
+  const {width: specSize} = getSize(image, size?.[1] || 1024);
 
-  if (width / height !== 2) {
+  if (skyW / skyH !== 2) {
     showError(`输入图片宽高比必须接近2:1 现在为${image.width}:${image.height}`)
   }
 
@@ -78,9 +79,9 @@ async function execOne(input: string, output: string, size?: number, bin?: boole
     fs.mkdirSync(output);
   }
   
-  let {specular, skybox, diffuse} = renderer.process(image, width, height);
-  const skyboxImg = await encodeImage(skybox, width, height, !rgb);
-  const specularImg = await encodeImage(specular, width, width, hdr, false);
+  let {specular, skybox, diffuse} = renderer.process(image, skyW, skyH, specSize);
+  const skyboxImg = await encodeImage(skybox, skyW, skyH, !rgb);
+  const specularImg = await encodeImage(specular, specSize, specSize, hdr);
 
   const json = {
     skybox: {type: '2D', half: false, map: undefined},
@@ -177,6 +178,9 @@ export async function exec(argv: yargs.Arguments) {
     showError('有效输入路径为0！');
   }
 
+  if (size) {
+    size = size.split(',').map(v => parseInt(v, 10));
+  }
   for (let index = 0; index < inputs.length; index += 1) {
     await execOne(inputs[index], outputs[index], size, bin); 
   }
