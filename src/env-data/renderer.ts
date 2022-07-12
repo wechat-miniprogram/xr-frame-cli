@@ -76,7 +76,7 @@ class Renderer {
     const specular = this._mipmaps(lodMap, specSize);
     const skybox = this._skybox(image, skyW, skyH);
 
-    return {specular, skybox, diffuse: this._generateSH(image, image.height)};
+    return {specular, skybox, diffuse: this._generateSH(image)};
   }
 
   private _skybox(image: IImage, width: number, height: number): Uint8Array {
@@ -210,19 +210,19 @@ class Renderer {
     return pixels;
   }
 
-  private _generateSH(image: IImage, dstH: number) {
+  private _generateSH(image: IImage) {
     const {width, height, hdr, rgb, buffer} = image;
-    const sizeX = dstH;
-    const sizeY = dstH / 2;
+    const sizeX = image.width;
+    const sizeY = image.height;
     const a = (4 * Math.PI / sizeX / sizeY) * (hdr ? 1 : 1 / 255);
     const sh9 = new Array(9).fill(0).map(() => [0, 0, 0]);
 
     for (let y = 0; y < sizeY; y += 1) {
       for (let x = 0; x < sizeX; x += 1) {
-        const theta = Math.acos(1 - x * 2.0 / (sizeX - 1));
-        const phi = 2 * Math.PI * (y * 1.0 / (sizeY - 1));
-        const v = Math.floor((1 - theta / Math.PI) * (height - 1));
-        const u = Math.floor((phi / Math.PI / 2) * (width - 1));
+        const theta = Math.acos(1 - x * 2 / (sizeX - 1));
+        const phi = 2 * Math.PI * (y / (sizeY - 1));
+        const u = Math.floor((1 - theta / Math.PI) * (width - 1));
+        const v = Math.floor((phi / Math.PI / 2) * (height - 1));
         const offset = (v * height + u) * (rgb ? 3 : 4);
         SH9_LMS.forEach((lm, index) => {
           const basis = this._getSHBasis(lm, theta, phi);
