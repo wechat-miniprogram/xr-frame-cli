@@ -42,3 +42,26 @@ xr-frame gltf -h
 
 可以看到所有支持的操作。
 
+## 开发测试
+
+项目提供了一张图和一个模型用于开发测试。
+
+### env-data
+
+执行：
+
+```sh
+npm run dev && xr-frame env-data -i test/exr.exr
+```
+
+输出将会在`test/exr`目录下。
+
+### gltf
+
+执行：
+
+```sh
+npm run dev && xr-frame gltf -i test/gltf-sources/gltf/index.gltf -o test/gltf-dist
+```
+
+输出将会在`test/gltf-dist/gltf`目录下。

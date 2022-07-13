@@ -1,7 +1,13 @@
 node_modules
 dist
-test
 package-lock.json
 .vscode
 test
 .DS_Store
+
+!test/
+test/*
+!test/exr.exr
+!test/gltf-sources/
+test/gltf-sources/*
+!test/gltf-sources/gltf
