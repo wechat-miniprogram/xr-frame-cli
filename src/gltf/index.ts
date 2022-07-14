@@ -553,6 +553,33 @@ function align4(buffer: Buffer | ArrayBuffer) {
   return Buffer.alloc(4 - det);
 }
 
+export async function processGLB(glb: Buffer): Promise<Buffer> {
+  const buffers: {[path: string]: Buffer;} = {};
+
+  const res = await gltfPipe.glbToGltf(glb, {separate: true});
+  const gltf = res.gltf;
+  const separateResources = res.separateResources;
+
+  for (const relativePath in separateResources) {
+    if (/.bin$/.test(relativePath)) {
+      buffers[relativePath] = separateResources[relativePath];
+    }
+  }
+
+  for (const relativePath in buffers) {
+    delete separateResources[relativePath];
+  }
+
+  showInfo('输入模型解析结束，开始处理Mesh数据...');
+
+  const buffer = await processMeshes(gltf, buffers);
+  gltf.buffers = [{uri: 'buffer.bin', byteLength: buffer.byteLength}];
+  gltf.extensionsUsed = gltf.extensionsUsed || [];
+  gltf.extensionsUsed.push('WX_processed_model');
+
+  return generateGLB(gltf, buffer, separateResources);
+}
+
 async function execOne(entity: IEntity, toGLB: boolean) {
   showInfo(`处理开始 ${path.join(entity.iDir, entity.file)}`);
 
