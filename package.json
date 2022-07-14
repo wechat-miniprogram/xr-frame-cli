@@ -1,12 +1,12 @@
 {
   "name": "xr-frame-cli",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Command tools for xr-frame.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "export NODE_ENV=development && ./node_modules/.bin/tsc && npm link",
     "build": "./node_modules/.bin/tsc",
-    "prepublish": "npm run build"
+    "prepublishOnly": "npm run build"
   },
   "bin": {
     "xr-frame": "./dist/index.js"
