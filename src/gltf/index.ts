@@ -550,7 +550,7 @@ function getImageExtension(data: Buffer) {
 
 function align4(buffer: Buffer | ArrayBuffer) {
   const det = buffer.byteLength % 4;
-  return Buffer.alloc(4 - det);
+  return det ? Buffer.alloc(4 - det) : Buffer.alloc(0);
 }
 
 export async function processGLB(glb: Buffer): Promise<Buffer> {
