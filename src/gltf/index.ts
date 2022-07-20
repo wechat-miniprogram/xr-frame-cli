@@ -325,7 +325,7 @@ function processMesh(
       return;
     }
 
-    if (materials[material]?.normalTexture && !(geometry.NORMAL !== undefined && geometry.TANGENT !== undefined)) {
+    if ((materials[material]?.normalTexture && geometry.TANGENT === undefined) || geometry.NORMAL === undefined) {
       if (!geometry.TEXCOORD_0) {
         showWarn('需要生成法线数据但缺失uv数据，忽略...');
       } else if (indices === undefined) {
@@ -336,11 +336,13 @@ function processMesh(
           bvs[iaccessor.bufferView].buffer
         ) as Uint16Array;
 
-        if (!geometry.NORMAL) {
+        if (geometry.NORMAL === undefined) {
+          showInfo('生成法线数据...')
           generateNormal(geometry, indexBuffer, bvs, accessors);
         }
 
-        if (!geometry.TANGENT) {
+        if (geometry.TANGENT === undefined && materials[material]?.normalTexture) {
+          showInfo('生成切线数据...')
           generateTangent(geometry, indexBuffer, bvs, accessors);
         }
       }
