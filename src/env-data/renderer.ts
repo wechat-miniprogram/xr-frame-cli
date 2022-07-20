@@ -134,6 +134,7 @@ class Renderer {
       gl.useProgram(simpleShader.program);
       this._bindBuffers('simple');
       gl.uniform1i(simpleShader.uTex, 0);
+      gl.uniform1f(simpleShader.uHDR, image.hdr ? 1 : 0);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);

@@ -47,11 +47,25 @@ precision mediump float;
 precision highp int;
 varying highp vec2 v_uv;
 
+uniform float u_isHDR;
+
 uniform sampler2D u_texture;
+
+vec3 LINEARtoSRGB(vec3 linearIn)
+{
+  vec3 linOut = pow(linearIn.xyz,vec3(1.0 / 2.2));
+
+  return linOut;
+}
 
 void main()
 {
-  gl_FragColor = texture2D(u_texture, v_uv);
+  if (u_isHDR == 0.) {
+    vec4 col = texture2D(u_texture, v_uv);
+    gl_FragColor = vec4(LINEARtoSRGB(col.rgb), col.a);
+  } else {
+    gl_FragColor = texture2D(u_texture, v_uv);
+  }
 }
 `;
 
