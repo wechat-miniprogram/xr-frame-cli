@@ -112,6 +112,11 @@ async function processGlTF(entity: IEntity): Promise<{
     delete separateResources[relativePath];
   }
 
+  if (gltf.extensionsUsed?.indexOf('WX_processed_model') >= 0) {
+    showInfo('被CLI处理过的模型，跳过处理...');
+    return {gltf, buffer: Object.values(buffers)[0], assets: separateResources};  
+  }
+
   showInfo('输入模型解析结束，开始处理Mesh数据...');
 
   const buffer = await processMeshes(gltf, buffers);
