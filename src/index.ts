@@ -10,6 +10,10 @@ import * as Yargs from 'yargs';
 import {showError} from './utils';
 import * as cmdEnvData from './env-data';
 import * as cmdGltf from './gltf';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const json = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), {encoding: 'utf8'}));
 
 const {argv} = Yargs
   .command('$0', 'xr-frame相关脚手架，使用 `xr-frame -h` 查看所有有效指令。')
@@ -47,7 +51,9 @@ const {argv} = Yargs
       .describe('b', '是否转换为glb。')
   )
   .help('h')
-  .alias('h', 'help');
+  .alias('h', 'help')
+  .version(json.version)
+  .alias('v', 'version');
 
 if (['env-data', 'gltf'].indexOf(argv._[0]) < 0) {
   showError('无此指令, 使用 `xr-frame -h` 查看所有有效指令。');

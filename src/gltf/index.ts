@@ -86,7 +86,7 @@ async function processGlTF(entity: IEntity): Promise<{
   const buffers: {[path: string]: Buffer;} = {};
 
   if (!fs.existsSync(entity.oDir)) {
-    fs.mkdirSync(entity.oDir);
+    fs.mkdirSync(entity.oDir, {recursive: true});
   }
 
   if (entity.isGLB) {
@@ -307,6 +307,7 @@ function processBuffers(
     bv.buffer = 0;
     bv.byteLength = b.byteLength;
     offset += b.byteLength;
+    console.log(accessor, bv);
   });
 
   return buffer;

@@ -113,6 +113,11 @@ export async function readFileBuffer(filePath: string): Promise<Buffer> {
 
 export async function writeFile(filePath: string, buffer: Buffer | string): Promise<string> {
   return new Promise((resolve, reject) => {
+    const dir = filePath.replace(path.basename(filePath), '');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, {recursive: true});
+    }
+
     fs.writeFile(filePath, buffer, typeof buffer === 'string' ? {encoding: 'utf8'} : {}, err => {
       if (err) {
         reject(err);
