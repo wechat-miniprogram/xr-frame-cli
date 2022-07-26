@@ -307,7 +307,6 @@ function processBuffers(
     bv.buffer = 0;
     bv.byteLength = b.byteLength;
     offset += b.byteLength;
-    console.log(accessor, bv);
   });
 
   return buffer;

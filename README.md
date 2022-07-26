@@ -42,6 +42,8 @@ xr-frame gltf -h
 
 可以看到所有支持的操作。
 
+>如果需要更进阶的优化，可以尝试使用[SeinJSUnityToolkit](https://github.com/hiloteam/SeinJSUnityToolkit)。
+
 ## 开发测试
 
 项目提供了一张图和一个模型用于开发测试。
