@@ -235,9 +235,9 @@ function processGeometry(index: number, geo: any, accessors: any, bvs: any) {
     const min = new Array(count).fill(Infinity);
 
     let j: number = 0;
-    for (let i = 0; i < origView.length; i += origPerLen) {
+    for (let i = 0; i < accessor.count; i += 1) {
       for (let k = 0; k < count; k += 1) {
-        const v = view[j + k] = origView[i + k];
+        const v = view[j + k] = origView[i * origPerLen + k];
         max[k] = Math.max(v, max[k]);
         min[k] = Math.min(v, min[k]);
       }
@@ -261,11 +261,15 @@ function processBuffers(
   geoBuffers: {buffer: ArrayBuffer, stride: number}[]
 ) {
   let totalLen: number = 0;
+  const geoBVs = new Set<number>();
   const bvCache = new Set<string | number>();
   accessors.forEach((accessor) => {
-    if (accessor.geometryIndex !== undefined && !bvCache.has(`g-${accessor.geometryIndex}`)) {
-      totalLen += geoBuffers[accessor.geometryIndex].buffer.byteLength;
-      bvCache.add(`g-${accessor.geometryIndex}`);
+    if (accessor.geometryIndex !== undefined) {
+      geoBVs.add(accessor.bufferView);
+      if (!bvCache.has(`g-${accessor.geometryIndex}`)) {
+        totalLen += geoBuffers[accessor.geometryIndex].buffer.byteLength;
+        bvCache.add(`g-${accessor.geometryIndex}`);
+      }
     } else if (!bvCache.has(accessor.bufferView)) {
       totalLen += bvs[accessor.bufferView].buffer.byteLength;
       bvCache.add(accessor.bufferView);
@@ -273,7 +277,8 @@ function processBuffers(
   });
 
   const buffer = Buffer.alloc(totalLen);
-  const geoBvCache: {[key: string]: any} = {};
+  const usableGeoBVs = Array.from(geoBVs);
+  const geoBvCache: {[key: string]: number} = {};
   bvCache.clear();
 
   let offset: number = 0;
@@ -286,18 +291,28 @@ function processBuffers(
       bvCache.add(accessor.bufferView);
     } else if (accessor.geometryIndex !== undefined) {
       const cKey = `g-${accessor.geometryIndex}`;
-      if (geoBvCache[cKey]) {
-        bvs[accessor.bufferView] = geoBvCache[cKey];
+      if (geoBvCache[cKey] !== undefined) {
+        accessor.bufferView = geoBvCache[cKey];
         delete accessor.geometryIndex;
         return;
       }
       const {buffer: b1, stride} = geoBuffers[accessor.geometryIndex];
       delete accessor.geometryIndex;
-      bv = geoBvCache[cKey] = bvs[accessor.bufferView] = {
+      bv = {
         target: 34962,
         byteStride: stride
       };
       b = b1;
+
+      if (usableGeoBVs.length) {
+        geoBvCache[cKey] = usableGeoBVs.shift();
+      } else {
+        bvs.push(null);
+        geoBvCache[cKey] = bvs.length - 1;
+      }
+
+      accessor.bufferView = geoBvCache[cKey];
+      bvs[accessor.bufferView] = bv;
     } else {
       return;
     }
