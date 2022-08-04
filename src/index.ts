@@ -7,7 +7,7 @@
  */
 import * as Yargs from 'yargs';
 
-import {showError} from './utils';
+import {showError, showWarn} from './utils';
 import * as cmdEnvData from './env-data';
 import * as cmdGltf from './gltf';
 import * as fs from 'fs';
@@ -64,5 +64,9 @@ if (argv._[0] === 'env-data') {
 }
 
 if (argv._[0] === 'gltf') {
+  process["on"]("uncaughtException", (function (error) { 
+    console.error(error);
+    showError(`处理失败！这可能是因为当前gltf文件对Buffer的组织过于杂乱，建议使用'https://github.com/hiloteam/SeinJSUnityToolkit'进行优化！`);
+  }));
   cmdGltf.exec(argv);
 }

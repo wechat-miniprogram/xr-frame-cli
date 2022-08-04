@@ -124,6 +124,11 @@ async function processGlTF(entity: IEntity): Promise<{
 
   gltf.extensionsUsed = gltf.extensionsUsed || [];
   gltf.extensionsUsed.push('WX_processed_model');
+  gltf.extensions = gltf.extensions || {};
+  gltf.extensions.WX_processed_model = {
+    trustMaxAndMin: true,
+    simpleAttribNodeDontCheckTangent: true
+  };
 
   return {gltf, buffer, assets: separateResources};
 }
@@ -154,11 +159,16 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
     }
 
     primitives.forEach(prim => {
-      const {attributes} = prim;
+      const {attributes, targets} = prim;
 
       let index: number = 0;
       for (const geo of geometries) {
         let skip: boolean = false;
+        if (geo.targets && geo.targets !== targets) {
+          skip = true;
+          break;
+        }
+
         for (const attrName in attributes) {
           if (geo[attrName] && geo[attrName] !== attributes[attrName]) {
             skip = true;
@@ -177,6 +187,10 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
           }
         }
 
+        if (!geo.targets) {
+          geo.targets = targets;
+        }
+
         prim.geometry = index;
         index += 1;
         break;
@@ -186,6 +200,9 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
         const geo: any = {};
         for (const attrName in attributes) {
           geo[attrName] = attributes[attrName];
+        }
+        if (targets) {
+          geo.targets = targets;
         }
         geometries.push(geo);
         prim.geometry = geometries.length - 1;
@@ -198,8 +215,11 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
   });
 
   showInfo('法线切线补充完成，开始处理几何数据...');
-  const geoBuffers = geometries.map((geo, index) => {
-    return processGeometry(index, geo, gltf.accessors, gltf.bufferViews);
+  const geoBuffers: {buffer: ArrayBuffer, stride: number}[] = [];
+  let index: number = 0;
+  geometries.forEach((geo) => {
+    geoBuffers.push(...processGeometry(index, geo, gltf.accessors, gltf.bufferViews));
+    index = geoBuffers.length;
   });
 
   showInfo('交错几何数据组装完成，进行最后拼装...');
@@ -209,28 +229,45 @@ async function processMeshes(gltf: any, buffers: {[path: string]: Buffer;}) {
 function processGeometry(index: number, geo: any, accessors: any, bvs: any) {
   let maxCount: number = 0;
   let stride: number = 0;
-  for (const attrKey in geo) {
-    const attr = geo[attrKey];
-    const accessor = accessors[attr];
-    const s = getComponentByteLenthAndClass(accessor.componentType)[0] * getTypeLenth(accessor.type);
-    stride += s % 4 === 0 ? s : Math.floor(s / 4) + 4;
+  const bytesAttrMap: {attrIdx: number, stride: number}[] = [];
+
+  function calcAttr(attrIdx: number) {
+    const accessor = accessors[attrIdx];
+    let s = getComponentByteLenthAndClass(accessor.componentType)[0] * getTypeLenth(accessor.type);
+    s = s % 4 === 0 ? s : (Math.floor(s / 4) + 1) * 4;
+    bytesAttrMap.push({attrIdx, stride: s});
+    stride += s;
     maxCount = Math.max(accessor.count, maxCount);
   }
 
-  const buffer = Buffer.alloc(maxCount * stride).buffer;
+  // 过程中统计，左右byteStride相同的需要对称，记录accId和byteStride
+  Object.keys(geo).forEach(attrKey => {
+    if (attrKey === 'targets') {
+      geo[attrKey].forEach(target => {
+        Object.keys(target).forEach(key => {
+          calcAttr(target[key]);
+        });
+      });
+    } else {
+      calcAttr(geo[attrKey]);
+    }
+  });
 
-  let offset: number = 0;
-  for (const attrKey in geo) {
-    const attr = geo[attrKey];
-    const accessor = accessors[attr];
-    const bv = bvs[accessor.bufferView];
+  if (stride > 252 * 2) {
+    showError(`这是啥模型啊这么多attributes，byteStride都超过webgl限制(252)两倍了，我处理不了，另请高明吧！`);
+  }
+
+  let subStride: number;
+  let subMaps: {attrIdx: number, stride: number}[][];
+  function processAttr(attrIdx: number, subIndex: number, buffer: ArrayBuffer, offset: number) {
+    const accessor = accessors[attrIdx];
     const [_l, clz] = getComponentByteLenthAndClass(accessor.componentType);
     const count = getTypeLenth(accessor.type);
-    const origPerLen = (bv.stride || (_l * count)) / _l;
-    const perLen = stride / _l;
-
-    const origView = new clz(bv.buffer, accessor.byteOffset || 0) as Float32Array;
+    const perLen = subStride / _l;
     const view = new clz(buffer, offset) as Float32Array;
+    const bv = bvs[accessor.bufferView];
+    const origPerLen = bv ? (bv.stride || (_l * count)) / _l : count;
+    const origView = (bv ? new clz(bv.buffer, accessor.byteOffset || 0) : new clz(accessor.count * count)) as Float32Array;
     const max = new Array(count).fill(-Infinity);
     const min = new Array(count).fill(Infinity);
 
@@ -244,16 +281,63 @@ function processGeometry(index: number, geo: any, accessors: any, bvs: any) {
       j += perLen;
     }
 
-    accessor.geometryIndex = index;
+    accessor.geometryIndex = index + subIndex;
     accessor.count = maxCount;
     accessor.max = max;
     accessor.min = min;
     accessor.byteOffset = offset;
     const s = _l * count;
-    offset += s % 4 === 0 ? s : Math.floor(s / 4) + 4;
+    offset += s % 4 === 0 ? s : (Math.floor(s / 4) + 1) * 4;
+
+    return offset;
   }
 
-  return {buffer, stride};
+  if (stride <= 252) {
+    subStride = stride;
+    subMaps = [bytesAttrMap];
+  } else {
+    bytesAttrMap.sort((a, b) => a.stride - b.stride).reverse();
+    subMaps = [[], []];
+    const sums = [0, 0];
+    bytesAttrMap.forEach(v => {
+      const i = sums[0] <= sums[1] ? 0 : 1;
+      subMaps[i].push(v);
+      sums[i] += v.stride;
+    });
+    
+    subStride = Math.max(sums[0], sums[1]);
+    const diff = sums[0] - sums[1];
+
+    if (subStride > 252 || diff % 4 !== 0 || diff > 4 * 4) {
+      showError(`这是啥模型啊尝试分割超长图元失败(stride: ${subStride}, diff: ${diff})，我处理不了，另请高明吧！`);
+    }
+
+    if (diff !== 0) {
+      const subIdx = diff > 0 ? 0 : 1;
+      accessors.push({
+        componentType: 5126,
+        count: maxCount,
+        type: diff === 4 ? 'SCALAR' : diff === 8 ? "VEC2" : diff === 12 ? "VEC3" : "VEC4",
+        geometryIndex: index + subIdx
+      });
+      subMaps[subIdx].push({attrIdx: accessors.length - 1, stride: diff});
+    }
+  }
+
+  const res: {buffer: ArrayBuffer, stride: number}[] = subMaps.map(_ => {
+    return {stride: subStride, buffer: Buffer.alloc(maxCount * subStride).buffer};
+  });
+
+  subMaps.forEach((map, subIdx) => {
+    let offset: number = 0;
+    const buffer = res[subIdx].buffer;
+    
+    map.forEach(({attrIdx}) => {
+      offset = processAttr(attrIdx, subIdx, buffer, offset);
+    });
+  });
+
+  return res;
 }
 
 function processBuffers(
@@ -265,7 +349,7 @@ function processBuffers(
   const bvCache = new Set<string | number>();
   accessors.forEach((accessor) => {
     if (accessor.geometryIndex !== undefined) {
-      geoBVs.add(accessor.bufferView);
+      accessor.bufferView !== undefined && geoBVs.add(accessor.bufferView);
       if (!bvCache.has(`g-${accessor.geometryIndex}`)) {
         totalLen += geoBuffers[accessor.geometryIndex].buffer.byteLength;
         bvCache.add(`g-${accessor.geometryIndex}`);
@@ -282,7 +366,7 @@ function processBuffers(
   bvCache.clear();
 
   let offset: number = 0;
-  accessors.forEach((accessor) => {
+  accessors.forEach((accessor, i) => {
     let b: ArrayBuffer;
     let bv: any;
     if (accessor.geometryIndex === undefined && !bvCache.has(accessor.bufferView)) {
@@ -338,7 +422,8 @@ function processMesh(
       return;
     }
 
-    const geometry = geometries[prim.geometry];
+    const geoIndex = prim.geometry;
+    const geometry = geometries[geoIndex];
     delete prim.geometry;
 
     if (!geometry) {
@@ -368,7 +453,11 @@ function processMesh(
       }
     }
 
-    prim.attributes = geometry;
+    const {targets, ...attrs} = geometry;
+    prim.attributes = attrs;
+    if (targets) {
+      prim.targets = targets;
+    }
   });
 }
 
