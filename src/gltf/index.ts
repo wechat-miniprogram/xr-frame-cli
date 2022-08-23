@@ -608,6 +608,8 @@ async function generateGLB(gltf: any, buffer: Buffer, assets: {[rp: string]: Buf
   });
 
   const bin2Buffer = Buffer.concat(bin2Buffers);
+  const fBuffer = Buffer.concat([buffer, bin2Buffer]);
+  const fBAlign = align4(fBuffer);
   gltf.buffers = [{byteLength: buffer.byteLength + bin2Buffer.byteLength}];
   const json = Buffer.from(JSON.stringify(gltf));
   const jsonAlign = align4(json);
@@ -617,17 +619,17 @@ async function generateGLB(gltf: any, buffer: Buffer, assets: {[rp: string]: Buf
       0x46546C67,
       2,
       28 + json.byteLength + jsonAlign.byteLength + buffer.byteLength + bin2Buffer.byteLength,
-      json.byteLength,
+      json.byteLength + jsonAlign.byteLength,
       0x4e4f534a
     ]).buffer),
     json,
     jsonAlign,
     new Uint8Array(new Uint32Array([
-      buffer.byteLength + bin2Buffer.byteLength,
+      fBuffer.byteLength + fBAlign.byteLength,
       0x004e4942
     ]).buffer),
-    buffer,
-    bin2Buffer
+    fBuffer,
+    fBAlign
   ]);
 
   return glb;
@@ -661,7 +663,7 @@ function getImageExtension(data: Buffer) {
 
 function align4(buffer: Buffer | ArrayBuffer) {
   const det = buffer.byteLength % 4;
-  return det ? Buffer.alloc(4 - det) : Buffer.alloc(0);
+  return det ? Buffer.alloc(4 - det).fill(0x20) : Buffer.alloc(0);
 }
 
 export async function processGLB(glb: Buffer): Promise<Buffer> {
