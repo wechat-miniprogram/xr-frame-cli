@@ -18,16 +18,15 @@ varying highp vec2 v_uv;
 uniform sampler2D u_texture;
 uniform float u_isHDR;
 
-vec3 acesToneMapping(vec3 color) {
-  return (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
-}
-
-
 vec3 LINEARtoSRGB(vec3 linearIn)
 {
   vec3 linOut = pow(linearIn.xyz,vec3(1.0 / 2.2));
 
   return linOut;
+}
+
+vec3 acesToneMapping(vec3 color) {
+  return (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
 }
 
 void main()
@@ -70,6 +69,9 @@ void main()
 `;
 
 export const blurFrag = `
+#define GOLDEN_ANGLE 2.40
+#define BLUR_NUMBER 1024
+
 precision mediump float;
 precision highp int;
 varying highp vec2 v_uv;
@@ -77,8 +79,6 @@ varying highp vec2 v_uv;
 uniform sampler2D u_texture;
 uniform vec4 u_blurOffset;
 
-#define GOLDEN_ANGLE 2.40 //(3.0-sqrt(5))*PI
-#define BLUR_NUMBER 1024
 
 mat2 rotate2D = mat2(cos(GOLDEN_ANGLE),sin(GOLDEN_ANGLE),-sin(GOLDEN_ANGLE),cos(GOLDEN_ANGLE));
 

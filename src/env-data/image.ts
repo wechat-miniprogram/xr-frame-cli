@@ -113,12 +113,13 @@ export async function encodeImage(
   colorBuffer: ArrayBufferView,
   width: number, height: number, png: boolean
 ): Promise<ArrayBuffer> {
+  // exr to jpg的时候先转成png避免bug
   const img = sharp(colorBuffer, {
     raw: {width, height, channels: 4, premultiplied: false}
-  })
+  }).png();
   
   if (png) {
-    return img.png().toBuffer();
+    return img.toBuffer();
   }
   
   return img.jpeg().toBuffer();

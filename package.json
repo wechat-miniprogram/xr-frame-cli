@@ -1,6 +1,6 @@
 {
   "name": "xr-frame-cli",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Command tools for xr-frame.",
   "main": "dist/index.js",
   "scripts": {

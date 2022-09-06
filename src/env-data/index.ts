@@ -80,7 +80,7 @@ async function execOne(input: string, output: string, size?: number[], bin?: boo
   }
   
   let {specular, skybox, diffuse} = renderer.process(image, skyW, skyH, specSize);
-  const skyboxImg = await encodeImage(skybox, skyW, skyH, !rgb);
+  const skyboxImg = await encodeImage(skybox, skyW, skyH, false);
   const specularImg = await encodeImage(specular, specSize, specSize, hdr);
 
   const json = {
@@ -90,7 +90,7 @@ async function execOne(input: string, output: string, size?: number[], bin?: boo
   };
 
   if (!bin) {
-    const skyboxPath = json.skybox.map = `skybox.${!rgb ? 'png' : 'jpg'}`;
+    const skyboxPath = json.skybox.map = `skybox.jpg`;
     const specularPath = json.specular.map = `specular.${hdr ? 'png' : 'jpg'}`;
     fs.writeFileSync(path.resolve(output, specularPath), specularImg);
     fs.writeFileSync(path.resolve(output, skyboxPath), skyboxImg);
@@ -100,7 +100,7 @@ async function execOne(input: string, output: string, size?: number[], bin?: boo
     const skyboxImgFill = align4(skyboxImg);
     json.skybox.map = {
       offset: 0, length: skyboxImg.byteLength,
-      type: rgb ? 'image/jpg' : 'image/png'
+      type: 'image/jpg'
     };
     const specularImgFill = align4(specularImg);
     json.specular.map = {
