@@ -361,6 +361,7 @@ function processBuffers(
   });
 
   const buffer = Buffer.alloc(totalLen);
+  const origBVs: Set<number> = new Set();
   const usableGeoBVs = Array.from(geoBVs);
   const geoBvCache: {[key: string]: number} = {};
   bvCache.clear();
@@ -369,6 +370,7 @@ function processBuffers(
   accessors.forEach((accessor, i) => {
     let b: ArrayBuffer;
     let bv: any;
+    origBVs.add(accessor.bufferView);
     if (accessor.geometryIndex === undefined && !bvCache.has(accessor.bufferView)) {
       bv = bvs[accessor.bufferView];
       b = bv.buffer;
@@ -406,6 +408,19 @@ function processBuffers(
     bv.buffer = 0;
     bv.byteLength = b.byteLength;
     offset += b.byteLength;
+  });
+
+  accessors.forEach((accessor, i) => {
+    if (origBVs.has(accessor.bufferView)) {
+      origBVs.delete(accessor.bufferView);
+    }
+  });
+
+  origBVs.forEach(bvid => {
+    delete bvs[bvid].byteStride;
+    bvs[bvid].buffer = 0;
+    bvs[bvid].byteOffset = 0;
+    bvs[bvid].byteLength = 1;
   });
 
   return buffer;
