@@ -27,13 +27,15 @@ class Renderer {
   private _gl: WebGLRenderingContext;
   private _resizeExt: any;
   private _floatExt: OES_texture_float;
+  private _lodExt: EXT_shader_texture_lod;
   private _shaders: {[name: string]: {
     program: WebGLProgram,
     aPosition: number,
     aUV: number,
     uTex: WebGLUniformLocation,
     uHDR: WebGLUniformLocation,
-    uBlurOffset: WebGLUniformLocation
+    uBlurOffset: WebGLUniformLocation,
+    uAvgColor: WebGLUniformLocation
   }} = {};
   private _ib: WebGLBuffer;
   private _vb: WebGLBuffer;
@@ -50,12 +52,13 @@ class Renderer {
     const gl: WebGLRenderingContext = this._gl = GL(2048, 2048, {preserveDrawingBuffer: true});
     this._resizeExt = this._gl.getExtension('STACKGL_resize_drawingbuffer');
     this._floatExt = this._gl.getExtension('OES_texture_float');
+    this._lodExt = gl.getExtension('EXT_shader_texture_lod');
 
     this._createBuffers();
+    this._createProgram('skybox', vert, skyboxFrag);
     this._createProgram('simple', vert, simpleFrag);
     this._createProgram('blur', vert, blurFrag);
     this._createProgram('mipmaps', mipmapsVert, mipmapsFrag);
-    this._createProgram('skybox', vert, skyboxFrag);
 
     gl.disable(gl.STENCIL_TEST);
     gl.disable(gl.DEPTH_TEST);
@@ -70,8 +73,6 @@ class Renderer {
     skybox: Uint8Array,
     diffuse: number[][]
   } {
-    const gl = this._gl;
-
     const lodMap = this._blur(image, specSize);
     const specular = this._mipmaps(lodMap, specSize);
     const skybox = this._skybox(image, skyW, skyH);
@@ -83,10 +84,28 @@ class Renderer {
     const gl = this._gl;
     this._resizeExt.resize(width, height);
     const shader = this._shaders['skybox'];
-    const tex = this._getTexture(image.width, image.height, image.rgb, image.hdr, image.premultiplyAlpha, image.buffer);
+    const tex = this._getTexture(image.width, image.height, image.rgb, image.hdr, image.premultiplyAlpha, image.buffer, true, true);
     const rtData = this._getRT(width, height);
     const fb = rtData.frameBuffer;
-    const rt = rtData.renderTexture;
+
+    let avgColor: number[] = [0, 0, 0];
+    if (image.hdr) {
+      const maxC: number[] = [0, 0, 0];
+      const colors = image.buffer as Float32Array;
+      const count = image.width * image.height;
+      const step = colors.length / count;
+      for (let index = 0; index < colors.length; index += step) {
+        avgColor[0] += colors[index];
+        avgColor[1] += colors[index + 1];
+        avgColor[2] += colors[index + 2];
+
+        maxC[0] = Math.max(maxC[0], colors[index]);
+        maxC[1] = Math.max(maxC[1], colors[index + 1]);
+        maxC[2] = Math.max(maxC[2], colors[index + 2]);
+      }
+
+      avgColor = avgColor.map(v => v / count);
+    }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.viewport(0, 0, width, height);
@@ -94,6 +113,7 @@ class Renderer {
     this._bindBuffers('skybox');
     gl.uniform1f(shader.uHDR, image.hdr ? 1 : 0);
     gl.uniform1i(shader.uTex, 0);
+    gl.uniform3f(shader.uAvgColor, avgColor[0], avgColor[1], avgColor[2]);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
@@ -266,7 +286,7 @@ class Renderer {
 
   private _getTexture(
     width: number, height: number, rgb: boolean, hdr: boolean, premultiplyAlpha: boolean,
-    source?: ArrayBufferView, useCache: boolean = true
+    source?: ArrayBufferView, useCache: boolean = true, generateMipmap: boolean = false
   ): WebGLTexture {
     const gl = this._gl;
     const key = `${width}_${height}_${hdr}`;
@@ -278,6 +298,7 @@ class Renderer {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplyAlpha);
       gl.texImage2D(gl.TEXTURE_2D, 0, format, width, height, 0, format, type, source);
+      generateMipmap && gl.generateMipmap(gl.TEXTURE_2D);
       return tex;
     }
 
@@ -289,6 +310,8 @@ class Renderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplyAlpha);
     gl.texImage2D(gl.TEXTURE_2D, 0, format, width, height, 0, format, type, source);
+
+    generateMipmap && gl.generateMipmap(gl.TEXTURE_2D);
 
     if (useCache) {
       this._texCache[key] = tex;
@@ -343,7 +366,9 @@ class Renderer {
     gl.deleteShader(f);
 
     const shader = this._shaders[name] = {
-      program, aPosition: undefined, aUV: undefined, uTex: undefined, uHDR: undefined, uBlurOffset: undefined
+      program, aPosition: undefined, aUV: undefined,
+      uTex: undefined, uHDR: undefined, uBlurOffset: undefined,
+      uAvgColor: undefined
     };
 
     for (let i = 0; i < 2; i += 1) {
@@ -365,6 +390,8 @@ class Renderer {
         shader.uHDR = gl.getUniformLocation(program, name);
       } else if (name === 'u_blurOffset') {
         shader.uBlurOffset = gl.getUniformLocation(program, name);
+      } else if (name === 'u_avgColor') {
+        shader.uAvgColor = gl.getUniformLocation(program, name);
       }
     }
 

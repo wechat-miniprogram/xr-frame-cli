@@ -17,6 +17,7 @@ varying highp vec2 v_uv;
 
 uniform sampler2D u_texture;
 uniform float u_isHDR;
+uniform vec3 u_avgColor;
 
 vec3 LINEARtoSRGB(vec3 linearIn)
 {
@@ -25,18 +26,21 @@ vec3 LINEARtoSRGB(vec3 linearIn)
   return linOut;
 }
 
-vec3 acesToneMapping(vec3 color) {
+vec3 aces(vec3 color) {
   return (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
 }
 
 void main()
 {
   vec4 color = texture2D(u_texture, v_uv);
+  vec3 avgColor = u_avgColor;
+  float avgLum = 0.2125 * avgColor.r + 0.7154  * avgColor.g + 0.0721 * avgColor.b;
+  vec3 scaledColor = color.rgb / (9.6 * avgLum);
 
   if (u_isHDR == 0.) {
     gl_FragColor = vec4(LINEARtoSRGB(color.rgb), 1.0);
   } else {
-    gl_FragColor = vec4(LINEARtoSRGB(acesToneMapping(color.rgb)), 1.0);
+    gl_FragColor = vec4(LINEARtoSRGB(aces(scaledColor)), 1.0);
   }
 }
 `;
