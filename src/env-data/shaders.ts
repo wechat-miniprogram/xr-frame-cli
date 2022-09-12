@@ -33,14 +33,14 @@ vec3 aces(vec3 color) {
 void main()
 {
   vec4 color = texture2D(u_texture, v_uv);
-  vec3 avgColor = u_avgColor;
-  float avgLum = 0.2125 * avgColor.r + 0.7154  * avgColor.g + 0.0721 * avgColor.b;
-  vec3 scaledColor = color.rgb / (9.6 * avgLum);
+  // vec3 avgColor = u_avgColor;
+  // float avgLum = 0.2125 * avgColor.r + 0.7154  * avgColor.g + 0.0721 * avgColor.b;
+  // vec3 scaledColor = color.rgb / (9.6 * avgLum);
 
   if (u_isHDR == 0.) {
     gl_FragColor = vec4(LINEARtoSRGB(color.rgb), 1.0);
   } else {
-    gl_FragColor = vec4(LINEARtoSRGB(aces(scaledColor)), 1.0);
+    gl_FragColor = vec4(LINEARtoSRGB(aces(color.rgb)), 1.0);
   }
 }
 `;

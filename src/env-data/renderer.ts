@@ -88,24 +88,25 @@ class Renderer {
     const rtData = this._getRT(width, height);
     const fb = rtData.frameBuffer;
 
-    let avgColor: number[] = [0, 0, 0];
-    if (image.hdr) {
-      const maxC: number[] = [0, 0, 0];
-      const colors = image.buffer as Float32Array;
-      const count = image.width * image.height;
-      const step = colors.length / count;
-      for (let index = 0; index < colors.length; index += step) {
-        avgColor[0] += colors[index];
-        avgColor[1] += colors[index + 1];
-        avgColor[2] += colors[index + 2];
+    // 把HDR调色交给用户，这里不再做处理，只做ACES ToneMapping
+    // let avgColor: number[] = [0, 0, 0];
+    // if (image.hdr) {
+    //   const maxC: number[] = [0, 0, 0];
+    //   const colors = image.buffer as Float32Array;
+    //   const count = image.width * image.height;
+    //   const step = colors.length / count;
+    //   for (let index = 0; index < colors.length; index += step) {
+    //     avgColor[0] += colors[index];
+    //     avgColor[1] += colors[index + 1];
+    //     avgColor[2] += colors[index + 2];
 
-        maxC[0] = Math.max(maxC[0], colors[index]);
-        maxC[1] = Math.max(maxC[1], colors[index + 1]);
-        maxC[2] = Math.max(maxC[2], colors[index + 2]);
-      }
+    //     maxC[0] = Math.max(maxC[0], colors[index]);
+    //     maxC[1] = Math.max(maxC[1], colors[index + 1]);
+    //     maxC[2] = Math.max(maxC[2], colors[index + 2]);
+    //   }
 
-      avgColor = avgColor.map(v => v / count);
-    }
+    //   avgColor = avgColor.map(v => v / count);
+    // }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.viewport(0, 0, width, height);
@@ -113,7 +114,7 @@ class Renderer {
     this._bindBuffers('skybox');
     gl.uniform1f(shader.uHDR, image.hdr ? 1 : 0);
     gl.uniform1i(shader.uTex, 0);
-    gl.uniform3f(shader.uAvgColor, avgColor[0], avgColor[1], avgColor[2]);
+    // gl.uniform3f(shader.uAvgColor, avgColor[0], avgColor[1], avgColor[2]);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
