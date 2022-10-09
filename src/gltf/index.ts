@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as yargs from 'yargs';
 import * as gltfPipe from 'gltf-pipeline';
 import * as mime from 'mime';
+import * as sharp from 'sharp';
 import {vec2, vec3, vec4} from 'gl-matrix';
 import {
   showError,
@@ -78,7 +79,7 @@ function getEntity(fp: string, o: string): IEntity {
 }
 
 async function processGlTF(entity: IEntity): Promise<{
-  gltf: Object, buffer: Buffer, assets: {[key: string]: Buffer};
+  gltf: Object, buffer: Buffer, assets: {[key: string]: Buffer}, skip?: boolean
 }> {
   let gltf: any;
   let separateResources: {[key: string]: Buffer;};
@@ -114,7 +115,7 @@ async function processGlTF(entity: IEntity): Promise<{
 
   if (gltf.extensionsUsed?.indexOf('WX_processed_model') >= 0) {
     showInfo('被CLI处理过的模型，跳过处理...');
-    return {gltf, buffer: Object.values(buffers)[0], assets: separateResources};  
+    return {gltf, buffer: Object.values(buffers)[0], assets: separateResources, skip: true};  
   }
 
   showInfo('输入模型解析结束，开始处理Mesh数据...');
@@ -708,10 +709,55 @@ export async function processGLB(glb: Buffer): Promise<Buffer> {
   return generateGLB(gltf, buffer, separateResources);
 }
 
+async function processTextures(gltf: any, assets: {[rp: string]: Buffer}) {
+  for (const tex of gltf.textures) {
+    let repeat: boolean = true;
+
+    if (tex.sampler !== undefined) {
+      let {wrapS, wrapT} = gltf.samplers[tex.sampler];
+      wrapS = wrapS || 10497;
+      wrapT = wrapT || 10497;
+      repeat = wrapS === 10497 || wrapT === 10497;
+    }
+
+    if (repeat) {
+      const rp = gltf.images[tex.source].uri;
+      assets[rp] = await checkPOTandConvert(assets[rp], rp);
+    }
+  }
+}
+
+async function checkPOTandConvert(img: Buffer, rp: string): Promise<Buffer> {
+  const instance = await sharp(img);
+  const info = await instance.metadata();
+  const width = getPOT(info.width);
+  const height = getPOT(info.height);
+
+  if (width === info.width && height === info.height) {
+    return img;
+  }
+
+  showInfo(`处理repeat的非POT纹理 '${rp}'，[${info.width},${info.height}] -> [${width},${height}]`);
+
+  return await instance.resize({width, height}).toFormat(path.extname(rp).slice(1)).toBuffer();
+}
+
+function getPOT(s: number): number {
+  const log = Math.log2(s);
+  const int = ~~log;
+  const det = log % 1;
+
+  console.log(int, det)
+  return Math.pow(2, det < 0.4 ? int : int + 1);
+}
+
 async function execOne(entity: IEntity, toGLB: boolean) {
   showInfo(`处理开始 ${path.join(entity.iDir, entity.file)}`);
 
-  const {gltf, buffer, assets} = await processGlTF(entity);
+  const {gltf, buffer, assets, skip} = await processGlTF(entity);
+  // if (!skip) {
+    await processTextures(gltf, assets);
+  // }
 
   if (toGLB || entity.isGLB) {
     showInfo(`glb生成开始`);
