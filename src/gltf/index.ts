@@ -739,7 +739,7 @@ async function checkPOTandConvert(img: Buffer, rp: string): Promise<Buffer> {
 
   showInfo(`处理repeat的非POT纹理 '${rp}'，[${info.width},${info.height}] -> [${width},${height}]`);
 
-  return await instance.resize({width, height}).toFormat(path.extname(rp).slice(1)).toBuffer();
+  return await instance.resize({width, height, fit: sharp.fit.fill}).toFormat(path.extname(rp).slice(1)).toBuffer();
 }
 
 function getPOT(s: number): number {
