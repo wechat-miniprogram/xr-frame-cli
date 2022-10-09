@@ -747,7 +747,6 @@ function getPOT(s: number): number {
   const int = ~~log;
   const det = log % 1;
 
-  console.log(int, det)
   return Math.pow(2, det < 0.4 ? int : int + 1);
 }
 
