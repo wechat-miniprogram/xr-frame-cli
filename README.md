@@ -42,7 +42,7 @@ xr-frame gltf -h
 
 可以看到所有支持的操作。
 
->如果需要更进阶的优化，可以尝试使用[SeinJSUnityToolkit](https://github.com/hiloteam/SeinJSUnityToolkit)。
+>如果需要更进阶的优化，可以尝试使用[SeinJSUnityToolkit](https://github.com/hiloteam/SeinJSUnityToolkit)。注意如果要导出动画的话，不要勾选`Use SeinAnimator`。
 
 ## 开发测试
 
