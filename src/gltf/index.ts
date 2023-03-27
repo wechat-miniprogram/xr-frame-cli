@@ -634,7 +634,7 @@ async function generateGLB(gltf: any, buffer: Buffer, assets: {[rp: string]: Buf
     new Uint8Array(new Uint32Array([
       0x46546C67,
       2,
-      28 + json.byteLength + jsonAlign.byteLength + buffer.byteLength + bin2Buffer.byteLength,
+      28 + json.byteLength + jsonAlign.byteLength + fBuffer.byteLength + fBAlign.byteLength,
       json.byteLength + jsonAlign.byteLength,
       0x4e4f534a
     ]).buffer),
