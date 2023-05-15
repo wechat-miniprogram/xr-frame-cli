@@ -359,6 +359,10 @@ function processBuffers(
       totalLen += bvs[accessor.bufferView].buffer.byteLength;
       bvCache.add(accessor.bufferView);
     }
+
+    if (totalLen % 4) {
+      totalLen += (4 - totalLen % 4);
+    }
   });
 
   const buffer = Buffer.alloc(totalLen);
@@ -409,6 +413,9 @@ function processBuffers(
     bv.buffer = 0;
     bv.byteLength = b.byteLength;
     offset += b.byteLength;
+    if (offset % 4) {
+      offset += (4 - offset % 4);
+    }
   });
 
   accessors.forEach((accessor, i) => {
