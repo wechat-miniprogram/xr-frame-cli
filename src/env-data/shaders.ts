@@ -73,22 +73,12 @@ void main()
 `;
 
 export const blurFrag = `
-#define GOLDEN_ANGLE 2.40
-#define BLUR_NUMBER 1024
-
 precision mediump float;
 precision highp int;
 varying highp vec2 v_uv;
 
 uniform sampler2D u_texture;
 uniform vec4 u_blurOffset;
-
-
-mat2 rotate2D = mat2(cos(GOLDEN_ANGLE),sin(GOLDEN_ANGLE),-sin(GOLDEN_ANGLE),cos(GOLDEN_ANGLE));
-
-vec3 linearMix(vec3 a, vec3 b, float factor) {
-  return vec3(a * (1.0 - factor) + b * factor);
-}
 
 vec3 GaussianBlur(sampler2D map, vec2 uv, vec4 blurOffset) {
   vec4 uv01 = vec4(uv.x, uv.y, uv.x, uv.y) + blurOffset * vec4(1.0, 1.0, -1.0, -1.0);

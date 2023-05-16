@@ -146,8 +146,11 @@ class Renderer {
     // set LOD MAX as lodNumber
     for (let i = 0; i < lodNumber; i++) {
       const rtData = this._getRT(image.width, image.height);
+      const rtData2 = this._getRT(image.width, image.height);
       const fb = rtData.frameBuffer;
       const rt = rtData.renderTexture;
+      const fb2 = rtData2.frameBuffer;
+      const rt2 = rtData2.renderTexture;
 
       // draw basic texture
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
@@ -161,30 +164,29 @@ class Renderer {
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 
       // Bokeh and Gaussian Blur
-      if (i > 0) {
-        for (let j = 0; j < i; j++) {
-          // Horz blur
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-          gl.viewport(0, 0, image.width, image.height);
-          gl.useProgram(blurShader.program);
-          this._bindBuffers('blur');
-          gl.uniform4f(blurShader.uBlurOffset, blurRadius / resolutionX, 0, blurRadius / resolutionX, 0);
-          gl.uniform1i(blurShader.uTex, 0);
-          gl.activeTexture(gl.TEXTURE0);
-          gl.bindTexture(gl.TEXTURE_2D, rt);
-          gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-          // Vert blur
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-          gl.viewport(0, 0, image.width, image.height);
-          gl.useProgram(blurShader.program);
-          this._bindBuffers('blur');
-          gl.uniform4f(blurShader.uBlurOffset, 0, blurRadius / resolutionY, 0, blurRadius / resolutionY);
-          gl.uniform1i(blurShader.uTex, 0);
-          gl.activeTexture(gl.TEXTURE0);
-          gl.bindTexture(gl.TEXTURE_2D, rt);
-          gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-        } 
+      for (let j = 0; j < i; j++) {
+        // Horz blur
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
+        gl.viewport(0, 0, image.width, image.height);
+        gl.useProgram(blurShader.program);
+        this._bindBuffers('blur');
+        gl.uniform4f(blurShader.uBlurOffset, blurRadius / resolutionX, 0, blurRadius / resolutionX, 0);
+        gl.uniform1i(blurShader.uTex, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, rt);
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+        // Vert blur
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.viewport(0, 0, image.width, image.height);
+        gl.useProgram(blurShader.program);
+        this._bindBuffers('blur');
+        gl.uniform4f(blurShader.uBlurOffset, 0, blurRadius / resolutionY, 0, blurRadius / resolutionY);
+        gl.uniform1i(blurShader.uTex, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, rt2);
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
       }
+      
       lodMap[i] = {
         frameBuffer: fb,
         renderTexture: rt
