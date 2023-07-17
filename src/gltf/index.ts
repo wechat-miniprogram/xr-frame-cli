@@ -717,19 +717,21 @@ export async function processGLB(glb: Buffer): Promise<Buffer> {
 }
 
 async function processTextures(gltf: any, assets: {[rp: string]: Buffer}) {
-  for (const tex of gltf.textures) {
-    let repeat: boolean = true;
-
-    if (tex.sampler !== undefined) {
-      let {wrapS, wrapT} = gltf.samplers[tex.sampler];
-      wrapS = wrapS || 10497;
-      wrapT = wrapT || 10497;
-      repeat = wrapS === 10497 || wrapT === 10497;
-    }
-
-    if (repeat) {
-      const rp = gltf.images[tex.source].uri;
-      assets[rp] = await checkPOTandConvert(assets[rp], rp);
+  if (gltf.textures) {
+    for (const tex of gltf.textures) {
+      let repeat: boolean = true;
+  
+      if (tex.sampler !== undefined) {
+        let {wrapS, wrapT} = gltf.samplers[tex.sampler];
+        wrapS = wrapS || 10497;
+        wrapT = wrapT || 10497;
+        repeat = wrapS === 10497 || wrapT === 10497;
+      }
+  
+      if (repeat) {
+        const rp = gltf.images[tex.source].uri;
+        assets[rp] = await checkPOTandConvert(assets[rp], rp);
+      }
     }
   }
 }
