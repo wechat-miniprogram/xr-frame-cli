@@ -1,5 +1,11 @@
 # xr-frame-cli
 
+## 注意
+
+此项目已废弃，请使用全新的可视化工具[XR-FRAME-TOOLKIT](https://github.com/dtysky/xr-frame-toolkit)替代！
+
+## 原始文档
+
 用于微信小程序内置的`xr-frame`系统的CLI，提供以下两个功能：
 
 1. 通过环境贴图，生成`xr-frame`专用的`env-data`，包含`skybox`、`diffuse sh`和`specular map`，支持打包成单二进制文件。
